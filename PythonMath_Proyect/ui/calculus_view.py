@@ -1,9 +1,13 @@
-
 import customtkinter as ctk
 import sympy as sp
+from tkinter import messagebox
 
 from mathematics.calculus.derivates import calcular_derivada
 from mathematics.renderer import expresion_a_imagen
+from ui.graph_view import GraphView
+from mathematics.graphics.graph_engine import generar_datos_3d
+from visualization.graph_3D import Graph3D
+from visualization.graph_3D import Graph3D, detectar_camara
 
 
 # ─────────────────────────────────────────────
@@ -28,6 +32,8 @@ class CalculusView:
     def __init__(self, parent):
         self.parent = parent
         self.imagenes = []
+        self.ultima_funcion = None
+        self.ultima_derivada = None
 
         self.crear_interfaz()
 
@@ -178,6 +184,24 @@ class CalculusView:
             pady=(0, 20)
         )
 
+        self.boton_graficar = ctk.CTkButton(
+            entrada_card,
+            text="Graficar función y derivada",
+            height=45,
+            corner_radius=10,
+            fg_color="#17243B",
+            hover_color="#263650",
+            text_color=TEXTO,
+            font=(FUENTE, 14, "bold"),
+            command=self.graficar
+        )
+
+        self.boton_graficar.pack(
+            fill="x",
+            padx=20,
+            pady=(0, 20)
+        )
+
         # ─────────────────────────────────────
         # TARJETA DEL RESULTADO
         # ─────────────────────────────────────
@@ -289,6 +313,9 @@ class CalculusView:
 
             self.mostrar_resultado(funcion, derivada)
             self.mostrar_pasos(pasos)
+            funcion, derivada, pasos = calcular_derivada(expresion)
+            self.ultima_funcion = funcion
+            self.ultima_derivada = derivada
 
         except Exception as error:
             self.mostrar_error(
@@ -642,42 +669,148 @@ class CalculusView:
     def destroy(self):
         self.contenedor.destroy()
 
-    
-def limpiar_frame(self, frame):
-    """Elimina los widgets contenidos en un frame."""
-    for widget in frame.winfo_children():
-        widget.destroy()
+    def graficar(self):
+
+        if self.ultima_funcion is None:
+            messagebox.showwarning(
+                "Sin resultados",
+                "Primero debes calcular una derivada."
+            )
+            return
+
+        self.ventana_graficas = ctk.CTkToplevel(self.parent)
+
+        self.ventana_graficas.title("Seleccionar visualización")
+        self.ventana_graficas.geometry("500x300")
+        self.ventana_graficas.configure(fg_color=FONDO)
+
+        # Mantener encima de la aplicación
+        self.ventana_graficas.attributes("-topmost", True)
+        self.ventana_graficas.transient(self.parent)
+        self.ventana_graficas.grab_set()
+
+        self.ventana_graficas.resizable(False, False)
+
+        # Centrar ventana
+        self.ventana_graficas.update_idletasks()
+
+        ancho = self.ventana_graficas.winfo_width()
+        alto = self.ventana_graficas.winfo_height()
+
+        x = (self.ventana_graficas.winfo_screenwidth() - ancho) // 2
+        y = (self.ventana_graficas.winfo_screenheight() - alto) // 2
+
+        self.ventana_graficas.geometry(f"{ancho}x{alto}+{x}+{y}")
+
+        # Encabezado
+        ctk.CTkLabel(
+            self.ventana_graficas,
+            text="Seleccionar visualización",
+            font=(FUENTE, 22, "bold"),
+            text_color=TEXTO
+        ).pack(pady=(25, 5))
+
+        ctk.CTkLabel(
+            self.ventana_graficas,
+            text="¿Cómo deseas explorar tu función?",
+            font=(FUENTE, 13),
+            text_color=TEXTO_SECUNDARIO
+        ).pack(pady=(0, 25))
+
+        # Contenedor de botones
+        botones = ctk.CTkFrame(
+            self.ventana_graficas,
+            fg_color="transparent"
+        )
+
+        botones.pack(fill="x", padx=25)
+
+        # Botón 2D
+        ctk.CTkButton(
+            botones,
+            text="GRÁFICA 2D",
+            height=100,
+            corner_radius=12,
+            fg_color="#172554",
+            hover_color="#1E40AF",
+            font=(FUENTE, 16, "bold"),
+            command=self.abrir_grafica_2d
+        ).pack(
+            side="left",
+            fill="both",
+            expand=True,
+            padx=(0, 8)
+        )
+
+        # Botón 3D
+        ctk.CTkButton(
+            botones,
+            text="GRÁFICA 3D",
+            height=100,
+            corner_radius=12,
+            fg_color="#451A1A",
+            hover_color="#7F1D1D",
+            font=(FUENTE, 16, "bold"),
+            command=self.abrir_grafica_3d
+        ).pack(
+            side="right",
+            fill="both",
+            expand=True,
+            padx=(8, 0)
+        )
+
+    def abrir_grafica_2d(self):
+
+        self.ventana_graficas.destroy()
+
+        GraphView(
+            self.parent,
+            [
+                ("Función original", self.ultima_funcion),
+                ("Derivada", self.ultima_derivada)
+            ],
+            titulo="Cálculo diferencial - 2D"
+        )
 
 
-def mostrar_error(self, mensaje):
-    """Muestra un mensaje de error en el área de resultados."""
-    self.limpiar_frame(self.resultado_frame)
+    def abrir_grafica_3d(self):
 
-    ctk.CTkLabel(
-        self.resultado_frame,
-        text=mensaje,
-        font=("Poppins", 14),
-        text_color="#FF6B6B",
-        wraplength=500,
-        justify="center"
-    ).pack(
-        padx=12,
-        pady=15
-    )
+        self.ventana_graficas.destroy()
 
+        try:
+            datos = generar_datos_3d(
+                self.ultima_funcion
+            )
 
-def mostrar_mensaje_inicial(self):
-    """Muestra un mensaje al abrir el módulo de derivadas."""
-    self.limpiar_frame(self.resultado_frame)
+            visor = Graph3D(
+                usar_gestos=detectar_camara()
+            )
 
-    ctk.CTkLabel(
-        self.resultado_frame,
-        text="Introduce una función para comenzar.",
-        font=("Poppins", 14),
-        text_color="#A0A0A0",
-        wraplength=500,
-        justify="center"
-    ).pack(
-        padx=12,
-        pady=20
-    )
+            visor.mostrar_superficie(datos)
+
+        except Exception as error:
+            messagebox.showerror(
+                "Error de visualización 3D",
+                f"No se pudo abrir el visor.\n\n{error}"
+            )
+
+    def mostrar_error(self, mensaje):
+        """Muestra un mensaje de error en el área de resultados."""
+        self.limpiar_frame(self.resultado_frame)
+
+        ctk.CTkLabel(
+            self.resultado_frame,
+            text=mensaje,
+            font=("Poppins", 14),
+            text_color="#FF6B6B",
+            wraplength=500,
+            justify="center"
+        ).pack(
+            padx=12,
+            pady=15
+        )
+
+    def limpiar_frame(self, frame):
+            """Elimina los widgets contenidos en un frame."""
+            for widget in frame.winfo_children():
+                widget.destroy()

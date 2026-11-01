@@ -1,6 +1,7 @@
 
 import customtkinter as ctk
 import sympy as sp
+from ui.graph_view import GraphView
 
 from mathematics.calculus.limits import calcular_limite
 from mathematics.renderer import expresion_a_imagen
@@ -28,6 +29,8 @@ class LimitsView:
     def __init__(self, parent):
         self.parent = parent
         self.imagenes = []
+        self.ultima_funcion = None
+        self.ultimo_punto = None
 
         self.crear_interfaz()
 
@@ -218,6 +221,24 @@ class LimitsView:
             pady=(0, 20)
         )
 
+        self.boton_graficar = ctk.CTkButton(
+            entrada_card,
+            text="Graficar comportamiento del límite",
+            height=45,
+            corner_radius=10,
+            fg_color="#17243B",
+            hover_color="#263650",
+            text_color=TEXTO,
+            font=(FUENTE, 14, "bold"),
+            command=self.graficar
+        )
+
+        self.boton_graficar.pack(
+            fill="x",
+            padx=20,
+            pady=(0, 20)
+        )
+
         # ─────────────────────────────────────
         # TARJETA DEL RESULTADO
         # ─────────────────────────────────────
@@ -317,9 +338,9 @@ class LimitsView:
 
         try:
             funcion, punto, resultado, pasos = calcular_limite(
-                expresion,
-                punto
-            )
+                expresion, punto)
+            self.ultima_funcion = funcion
+            self.ultimo_punto = punto
 
             # Destruir los widgets anteriores antes de liberar
             # las referencias a sus imágenes.
@@ -676,3 +697,44 @@ class LimitsView:
 
     def destroy(self):
         self.contenedor.destroy()
+
+    
+
+    def graficar(self):
+
+        if self.ultima_funcion is None:
+            from tkinter import messagebox
+
+            messagebox.showwarning(
+                "Sin resultados",
+                "Primero debes calcular un límite."
+            )
+            return
+
+        try:
+            x = sp.Symbol("x")
+
+            punto = self.ultimo_punto
+
+            if punto in (sp.oo, -sp.oo):
+                desde = 0 if punto == sp.oo else -20
+                hasta = 20 if punto == sp.oo else 0
+            else:
+                punto = float(punto)
+                desde = punto - 10
+                hasta = punto + 10
+
+            GraphView(
+                self.parent,
+                [("Función", self.ultima_funcion)],
+                titulo="Comportamiento del límite"
+            )
+
+        except Exception as error:
+            from tkinter import messagebox
+
+            messagebox.showerror(
+                "Error al graficar",
+                str(error)
+            )
+

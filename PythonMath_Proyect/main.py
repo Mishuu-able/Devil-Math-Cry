@@ -2,6 +2,7 @@
 import customtkinter as ctk
 from ui.calculus_view import CalculusView
 from ui.limits_view import LimitsView
+from ui.algebra_view import AlgebraView
 
 
 # ============================================================
@@ -117,19 +118,7 @@ def mostrar_algebra():
     ocultar_bienvenida()
     limpiar_modulo()
 
-    vista = ctk.CTkFrame(
-        module_container,
-        fg_color="#0B1120",
-        corner_radius=0
-    )
-    vista.pack(fill="both", expand=True)
-
-    ctk.CTkLabel(
-        vista,
-        text="Álgebra",
-        font=("Poppins", 27, "bold"),
-        text_color="#F1F5F9"
-    ).pack(anchor="w", padx=30, pady=(24, 12))
+    AlgebraView(module_container)
 
 
 def mostrar_funciones():
