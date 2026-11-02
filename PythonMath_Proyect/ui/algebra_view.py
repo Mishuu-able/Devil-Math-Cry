@@ -12,24 +12,41 @@ from mathematics.algebra.operations import (
 
 from mathematics.parser import convertir_expresion
 from mathematics.renderer import expresion_a_imagen
+from tkinter import messagebox
+
+from mathematics.graphics.graph_engine import generar_datos_3d
+from visualization.graph_3D import Graph3D, detectar_camara
 
 
-# ─────────────────────────────────────────────
-# PALETA DE COLORES
-# ─────────────────────────────────────────────
+# ============================================================
+# PALETA CENTRALIZADA - MÓDULO ÁLGEBRA
+# ============================================================
 
-FONDO = "#0B1120"
-TARJETA = "#111C30"
-TARJETA_SECUNDARIA = "#17243B"
-AZUL = "#3B82F6"
-AZUL_HOVER = "#2563EB"
-TEXTO = "#F1F5F9"
-TEXTO_SECUNDARIO = "#94A3B8"
-BORDE = "#263650"
-VERDE = "#34D399"
-ROJO = "#F87171"
+from ui.theme import (
+    ALGEBRA_BG as FONDO,
+    ALGEBRA_CARD as TARJETA,
+    ALGEBRA_CARD_SECONDARY as TARJETA_SECUNDARIA,
 
-FUENTE = "Poppins"
+    ALGEBRA_PRIMARY as AZUL,
+    ALGEBRA_PRIMARY_HOVER as AZUL_HOVER,
+
+    ALGEBRA_TEXT as TEXTO,
+    ALGEBRA_TEXT_SECONDARY as TEXTO_SECUNDARIO,
+
+    ALGEBRA_BORDER as BORDE,
+
+    ALGEBRA_SUCCESS as VERDE,
+    ALGEBRA_ERROR as ROJO,
+
+    ALGEBRA_GRAPH_2D as GRAPH_2D_COLOR,
+    ALGEBRA_GRAPH_2D_HOVER as GRAPH_2D_HOVER,
+
+    ALGEBRA_GRAPH_3D as GRAPH_3D_COLOR,
+    ALGEBRA_GRAPH_3D_HOVER as GRAPH_3D_HOVER,
+
+    FONT_FAMILY as FUENTE
+)
+
 
 
 class AlgebraView:
@@ -46,6 +63,8 @@ class AlgebraView:
         self.parent = parent
         self.imagenes = []
         self.ultima_expresion = None
+        self.ultimo_resultado = None
+        self.ultima_operacion = None
 
         self.crear_interfaz()
 
@@ -277,8 +296,8 @@ class AlgebraView:
             text="Graficar expresión",
             height=45,
             corner_radius=10,
-            fg_color="#17243B",
-            hover_color="#263650",
+            fg_color= TARJETA_SECUNDARIA,
+            hover_color= BORDE,
             text_color=TEXTO,
             font=(FUENTE, 14, "bold"),
             command=self.graficar
@@ -501,6 +520,8 @@ class AlgebraView:
             )
 
             self.mostrar_pasos(pasos)
+            self.ultimo_resultado = resultado
+            self.ultima_operacion = operacion
 
         except Exception as error:
 
@@ -945,61 +966,155 @@ class AlgebraView:
     
     def graficar(self):
 
-        operacion = self.selector.get()
-
-        if operacion == "Resolver sistema":
-            from tkinter import messagebox
-
+        if self.ultimo_resultado is None:
             messagebox.showwarning(
-                "Operación no compatible",
-                "La gráfica de sistemas de ecuaciones "
-                "se implementará por separado."
+                "Sin resultados",
+                "Primero debes realizar una operación algebraica."
             )
             return
 
-        texto = self.entrada.get().strip()
-
-        if not texto:
-            from tkinter import messagebox
-
+        if isinstance(self.ultimo_resultado, str):
             messagebox.showwarning(
-                "Sin expresión",
-                "Introduce una expresión matemática."
+                "Resultado no graficable",
+                "Esta operación no produjo una expresión matemática."
             )
             return
+
+        if not isinstance(self.ultimo_resultado, sp.Expr):
+            messagebox.showwarning(
+                "Resultado no compatible",
+                "El resultado no puede representarse como una función."
+            )
+            return
+
+        expresion = sp.sympify(self.ultimo_resultado)
+
+        variables = expresion.free_symbols
+
+        if len(variables) != 1:
+            messagebox.showwarning(
+                "Expresión no compatible",
+                "Por ahora se necesitan expresiones de una sola variable: x."
+            )
+            return
+
+        variable = next(iter(variables))
+
+        if variable.name != "x":
+            expresion = expresion.subs(
+                variable,
+                sp.Symbol("x")
+            )
+
+        self.expresion_grafica = expresion
+
+        self.ventana_graficas = ctk.CTkToplevel(self.parent)
+
+        self.ventana_graficas.title("Seleccionar visualización")
+        self.ventana_graficas.geometry("500x300")
+        self.ventana_graficas.configure(fg_color=FONDO)
+
+        self.ventana_graficas.attributes("-topmost", True)
+        self.ventana_graficas.transient(self.parent)
+        self.ventana_graficas.grab_set()
+        self.ventana_graficas.resizable(False, False)
+
+        self.ventana_graficas.update_idletasks()
+
+        ancho = self.ventana_graficas.winfo_width()
+        alto = self.ventana_graficas.winfo_height()
+
+        x = (self.ventana_graficas.winfo_screenwidth() - ancho) // 2
+        y = (self.ventana_graficas.winfo_screenheight() - alto) // 2
+
+        self.ventana_graficas.geometry(
+            f"{ancho}x{alto}+{x}+{y}"
+        )
+
+        ctk.CTkLabel(
+            self.ventana_graficas,
+            text="Seleccionar visualización",
+            font=(FUENTE, 22, "bold"),
+            text_color=TEXTO
+        ).pack(pady=(25, 5))
+
+        ctk.CTkLabel(
+            self.ventana_graficas,
+            text="¿Cómo deseas explorar tu expresión?",
+            font=(FUENTE, 13),
+            text_color=TEXTO_SECUNDARIO
+        ).pack(pady=(0, 25))
+
+        botones = ctk.CTkFrame(
+            self.ventana_graficas,
+            fg_color="transparent"
+        )
+        botones.pack(fill="x", padx=25)
+
+        ctk.CTkButton(
+            botones,
+            text="GRÁFICA 2D",
+            height=100,
+            corner_radius=12,
+            fg_color= GRAPH_2D_COLOR,
+            hover_color= GRAPH_2D_HOVER,
+            font=(FUENTE, 16, "bold"),
+            command=self.abrir_grafica_2d
+        ).pack(
+            side="left",
+            fill="both",
+            expand=True,
+            padx=(0, 8)
+        )
+
+        ctk.CTkButton(
+            botones,
+            text="GRÁFICA 3D",
+            height=100,
+            corner_radius=12,
+            fg_color= GRAPH_3D_COLOR,
+            hover_color= GRAPH_3D_HOVER,
+            font=(FUENTE, 16, "bold"),
+            command=self.abrir_grafica_3d
+        ).pack(
+            side="right",
+            fill="both",
+            expand=True,
+            padx=(8, 0)
+        )
+
+    def abrir_grafica_2d(self):
+        self.ventana_graficas.destroy()
+
+        GraphView(
+            self.parent,
+            [
+                ("Resultado algebraico", self.expresion_grafica)
+            ],
+            titulo="Álgebra - Gráfica 2D"
+        )
+
+    def abrir_grafica_3d(self):
+        self.ventana_graficas.destroy()
 
         try:
-            expresion = convertir_expresion(texto)
 
-            if not isinstance(expresion, sp.Expr):
-                raise ValueError("La expresión no es válida.")
-
-            variables = expresion.free_symbols
-
-            if len(variables) != 1:
-                raise ValueError(
-                    "Por ahora, las gráficas 2D requieren "
-                    "una sola variable, por ejemplo x."
-                )
-
-            variable = next(iter(variables))
-
-            if variable.name != "x":
-                expresion = expresion.subs(
-                    variable,
-                    sp.Symbol("x")
-                )
-
-            GraphView(
-                self.parent,
-                [("Expresión original", expresion)],
-                titulo="Gráfica algebraica"
+            datos = generar_datos_3d(
+                self.expresion_grafica
             )
 
+            visor = Graph3D(
+                usar_gestos=detectar_camara()
+            )
+
+            visor.mostrar_superficie(datos)
+
         except Exception as error:
-            from tkinter import messagebox
+
+            import traceback
+            traceback.print_exc()
 
             messagebox.showerror(
-                "Error al graficar",
-                str(error)
+                "Error de visualización 3D",
+                f"No se pudo abrir el visor.\n\n{error}"
             )

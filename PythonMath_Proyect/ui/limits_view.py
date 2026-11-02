@@ -3,26 +3,36 @@ import customtkinter as ctk
 import sympy as sp
 from ui.graph_view import GraphView
 
-from mathematics.calculus.limits import calcular_limite
+from mathematics.calculus.limits import (
+    calcular_limite,
+    analizar_comportamiento_limite
+)
 from mathematics.renderer import expresion_a_imagen
 
 
-# ─────────────────────────────────────────────
-# PALETA DE COLORES
-# ─────────────────────────────────────────────
+# ============================================================
+# PALETA CENTRALIZADA - MÓDULO LÍMITES
+# ============================================================
 
-FONDO = "#0B1120"
-TARJETA = "#111C30"
-TARJETA_SECUNDARIA = "#17243B"
-AZUL = "#3B82F6"
-AZUL_HOVER = "#2563EB"
-TEXTO = "#F1F5F9"
-TEXTO_SECUNDARIO = "#94A3B8"
-BORDE = "#263650"
-VERDE = "#34D399"
-ROJO = "#F87171"
+from ui.theme import (
+    LIMITS_BG as FONDO,
+    LIMITS_CARD as TARJETA,
+    LIMITS_CARD_SECONDARY as TARJETA_SECUNDARIA,
 
-FUENTE = "Poppins"
+    LIMITS_PRIMARY as AZUL,
+    LIMITS_PRIMARY_HOVER as AZUL_HOVER,
+
+    LIMITS_TEXT as TEXTO,
+    LIMITS_TEXT_SECONDARY as TEXTO_SECUNDARIO,
+
+    LIMITS_BORDER as BORDE,
+
+    LIMITS_SUCCESS as VERDE,
+    LIMITS_ERROR as ROJO,
+
+    FONT_FAMILY as FUENTE
+)
+
 
 
 class LimitsView:
@@ -226,8 +236,8 @@ class LimitsView:
             text="Graficar comportamiento del límite",
             height=45,
             corner_radius=10,
-            fg_color="#17243B",
-            hover_color="#263650",
+            fg_color= TARJETA_SECUNDARIA,
+            hover_color= BORDE,
             text_color=TEXTO,
             font=(FUENTE, 14, "bold"),
             command=self.graficar
@@ -700,6 +710,7 @@ class LimitsView:
 
     
 
+    
     def graficar(self):
 
         if self.ultima_funcion is None:
@@ -712,22 +723,56 @@ class LimitsView:
             return
 
         try:
-            x = sp.Symbol("x")
-
             punto = self.ultimo_punto
 
+            # =================================================
+            # LÍMITES EN INFINITO
+            # =================================================
+
             if punto in (sp.oo, -sp.oo):
-                desde = 0 if punto == sp.oo else -20
-                hasta = 20 if punto == sp.oo else 0
-            else:
-                punto = float(punto)
-                desde = punto - 10
-                hasta = punto + 10
+
+                GraphView(
+                    self.parent,
+                    [("Función", self.ultima_funcion)],
+                    titulo="Comportamiento en el infinito"
+                )
+                
+
+                return
+
+            # =================================================
+            # ANALIZAR COMPORTAMIENTO
+            # =================================================
+
+            analisis = analizar_comportamiento_limite(
+                self.ultima_funcion,
+                punto
+            )
+
+            print("\n========== DEBUG LIMITS ==========")
+            print("Función guardada:", self.ultima_funcion)
+            print("Función simplificada:", sp.cancel(self.ultima_funcion))
+            print("Punto:", self.ultimo_punto)
+
+            print(
+                "Análisis:",
+                analizar_comportamiento_limite(
+                    self.ultima_funcion,
+                    self.ultimo_punto
+                )
+            )
+
+            print("=================================\n")
+
+            # =================================================
+            # ABRIR VISUALIZACIÓN
+            # =================================================
 
             GraphView(
                 self.parent,
                 [("Función", self.ultima_funcion)],
-                titulo="Comportamiento del límite"
+                titulo="Análisis gráfico del límite",
+                analisis_limite=analisis
             )
 
         except Exception as error:
@@ -737,4 +782,5 @@ class LimitsView:
                 "Error al graficar",
                 str(error)
             )
+
 

@@ -3,6 +3,9 @@ import customtkinter as ctk
 from ui.calculus_view import CalculusView
 from ui.limits_view import LimitsView
 from ui.algebra_view import AlgebraView
+from ui.functions_view import FunctionsView
+from ui.exercises_view import ExercisesView
+from ui.theme import BG_CONTENT, BG_MODULE
 
 
 # ============================================================
@@ -98,8 +101,8 @@ def limpiar_modulo():
 def ocultar_bienvenida():
     header.pack_forget()
 
-    content.configure(fg_color="#0B1120")
-    module_container.configure(fg_color="#0B1120")
+    content.configure(fg_color=BG_MODULE)
+    module_container.configure(fg_color=BG_MODULE)
 
 
 def mostrar_calculo():
@@ -125,38 +128,13 @@ def mostrar_funciones():
     ocultar_bienvenida()
     limpiar_modulo()
 
-    vista = ctk.CTkFrame(
-        module_container,
-        fg_color="#0B1120",
-        corner_radius=0
-    )
-    vista.pack(fill="both", expand=True)
-
-    ctk.CTkLabel(
-        vista,
-        text="Funciones",
-        font=("Poppins", 27, "bold"),
-        text_color="#F1F5F9"
-    ).pack(anchor="w", padx=30, pady=(24, 12))
-
+    FunctionsView(module_container)
 
 def mostrar_ejercicios():
     ocultar_bienvenida()
     limpiar_modulo()
 
-    vista = ctk.CTkFrame(
-        module_container,
-        fg_color="#0B1120",
-        corner_radius=0
-    )
-    vista.pack(fill="both", expand=True)
-
-    ctk.CTkLabel(
-        vista,
-        text="Ejercicios",
-        font=("Poppins", 27, "bold"),
-        text_color="#F1F5F9"
-    ).pack(anchor="w", padx=30, pady=(24, 12))
+    ExercisesView(module_container)
 
 
 
@@ -240,7 +218,7 @@ boton_limites.pack(
 content = ctk.CTkFrame(
     main_container,
     corner_radius=0,
-    fg_color="#212121"
+    fg_color=BG_CONTENT
 )
 
 content.pack(

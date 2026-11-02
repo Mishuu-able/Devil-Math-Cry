@@ -15,7 +15,7 @@ class HandTracker:
         self,
         model_path="hand_landmarker.task",
         camera_index=0,
-        show_preview=True
+        show_preview=False
     ):
 
         self.model_path = str(Path(model_path).resolve())
@@ -24,19 +24,15 @@ class HandTracker:
 
         self.running = False
         self.thread = None
-
         self.lock = threading.Lock()
 
         self.hand_data = {
             "detected": False,
             "x": 0.5,
             "y": 0.5,
-            "timestamp": 0.0
+            "timestamp": 0.0,
+            "frame": None
         }
-
-    # ======================================
-    # INICIAR SEGUIMIENTO
-    # ======================================
 
     def start(self):
 
@@ -52,10 +48,6 @@ class HandTracker:
 
         self.thread.start()
 
-    # ======================================
-    # DETENER SEGUIMIENTO
-    # ======================================
-
     def stop(self):
 
         self.running = False
@@ -66,28 +58,29 @@ class HandTracker:
         ):
             self.thread.join(timeout=2)
 
-    # ======================================
-    # OBTENER DATOS
-    # ======================================
+        self.thread = None
 
     def get_data(self):
 
         with self.lock:
             return self.hand_data.copy()
 
-    def _set_data(self, detected, x=0.5, y=0.5):
+    def _set_data(
+        self,
+        detected,
+        x=0.5,
+        y=0.5,
+        frame=None
+    ):
 
         with self.lock:
             self.hand_data = {
                 "detected": detected,
                 "x": x,
                 "y": y,
-                "timestamp": time.monotonic()
+                "timestamp": time.monotonic(),
+                "frame": frame
             }
-
-    # ======================================
-    # DETECCIÓN DE MANOS
-    # ======================================
 
     def _tracking_loop(self):
 
@@ -115,10 +108,6 @@ class HandTracker:
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
-            connections = (
-                vision.HandLandmarksConnections.HAND_CONNECTIONS
-            )
-
             with vision.HandLandmarker.create_from_options(
                 options
             ) as detector:
@@ -131,7 +120,8 @@ class HandTracker:
                     ret, frame = cap.read()
 
                     if not ret:
-                        break
+                        time.sleep(0.01)
+                        continue
 
                     frame = cv2.flip(frame, 1)
 
@@ -165,7 +155,6 @@ class HandTracker:
 
                         hand = result.hand_landmarks[0]
 
-                        # Centro aproximado de la palma
                         indices = [0, 5, 9, 13, 17]
 
                         center_x = sum(
@@ -176,64 +165,61 @@ class HandTracker:
                             hand[i].y for i in indices
                         ) / len(indices)
 
-                        self._set_data(
-                            True,
-                            center_x,
-                            center_y
+                        height, width = frame.shape[:2]
+
+                        # Dibujar el esqueleto
+                        connections = (
+                            vision.HandLandmarksConnections.HAND_CONNECTIONS
                         )
 
-                        if self.show_preview:
+                        for connection in connections:
 
-                            height, width = frame.shape[:2]
+                            start = hand[connection.start]
+                            end = hand[connection.end]
 
-                            # Dibujar conexiones
-                            for connection in connections:
-
-                                start = hand[connection.start]
-                                end = hand[connection.end]
-
-                                p1 = (
-                                    int(start.x * width),
-                                    int(start.y * height)
-                                )
-
-                                p2 = (
-                                    int(end.x * width),
-                                    int(end.y * height)
-                                )
-
-                                cv2.line(
-                                    frame,
-                                    p1,
-                                    p2,
-                                    (0, 255, 0),
-                                    2
-                                )
-
-                            # Centro de la palma
-                            cx = int(center_x * width)
-                            cy = int(center_y * height)
-
-                            cv2.circle(
-                                frame,
-                                (cx, cy),
-                                10,
-                                (255, 0, 255),
-                                -1
+                            p1 = (
+                                int(start.x * width),
+                                int(start.y * height)
                             )
 
-                            # Centro neutral de referencia
-                            cv2.circle(
+                            p2 = (
+                                int(end.x * width),
+                                int(end.y * height)
+                            )
+
+                            cv2.line(
                                 frame,
-                                (width // 2, height // 2),
-                                35,
-                                (255, 255, 0),
+                                p1,
+                                p2,
+                                (0, 255, 0),
                                 2
                             )
 
+                        # Centro de la palma
+                        cx = int(center_x * width)
+                        cy = int(center_y * height)
+
+                        cv2.circle(
+                            frame,
+                            (cx, cy),
+                            10,
+                            (255, 0, 255),
+                            -1
+                        )
+
+                        self._set_data(
+                            True,
+                            center_x,
+                            center_y,
+                            frame
+                        )
+
                     else:
 
-                        self._set_data(False)
+                        self._set_data(
+                            False,
+                            frame=frame
+                        )
 
                     if self.show_preview:
 
@@ -253,6 +239,7 @@ class HandTracker:
         finally:
 
             self._set_data(False)
+
             self.running = False
 
             if cap is not None:

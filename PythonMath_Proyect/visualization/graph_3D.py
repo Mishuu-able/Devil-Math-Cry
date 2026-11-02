@@ -10,20 +10,22 @@ from tracking.camera_controller import CameraController
 
 class Graph3D:
 
-    def __init__(self, usar_gestos=False):
+    def __init__(self, usar_gestos=False, modo_debug=False):
 
         self.usar_gestos = usar_gestos
+        self.modo_debug = modo_debug
 
-        self.plotter = pv.Plotter(
-            window_size=(1200, 850)
-        )
+        # ======================================
+        # CONTROLADOR DE CÁMARA
+        # ======================================
 
-        if self.usar_gestos:
-            self.hand_tracker = HandTracker(
-                model_path="hand_landmarker.task",
-                camera_index=0,
-                show_preview=True
-            )
+        self.ultimo_tiempo = time.monotonic()
+        self.mano_detectada = False
+
+        self.camera_controller = None
+        self.hand_tracker = None
+
+        if self.usar_gestos or self.modo_debug:
 
             self.camera_controller = CameraController(
                 dead_zone=0.06,
@@ -32,10 +34,23 @@ class Graph3D:
                 smoothing=0.12
             )
 
-            self.ultimo_tiempo = time.monotonic()
-            self.mano_detectada = False
+        if self.usar_gestos and not self.modo_debug:
 
-        # El resto de tu constructor continúa igual...
+            self.hand_tracker = HandTracker(
+                model_path="hand_landmarker.task",
+                camera_index=0,
+                show_preview=True
+            )
+
+        # Posición simulada de la palma
+        self.debug_x = 0.5
+        self.debug_y = 0.5
+
+        self.debug_speed = 0.65
+
+        self.plotter = pv.Plotter(
+            window_size=(1200, 850)
+        )
 
         # ======================================
         # CONFIGURACIÓN
@@ -55,6 +70,8 @@ class Graph3D:
 
         self.configurar_escena()
         self.configurar_controles()
+
+    # Conserva aquí tu diccionario self.vistas original.
         self.vistas = {
 
             "x+": {
@@ -192,13 +209,6 @@ class Graph3D:
             self.tecla_liberada
         )
 
-        interactor.add_observer(
-            "TimerEvent",
-            self.actualizar_camara
-        )
-
-        interactor.create_timer(16)
-
     # ==========================================
     # MOVIMIENTO CONTINUO
     # ==========================================
@@ -207,33 +217,115 @@ class Graph3D:
 
         tecla = obj.GetKeySym().lower()
 
-        if tecla in ("w", "a", "s", "d", "i", "k"):
-            self.teclas_activas.add(tecla)
+        print(f"[DEBUG] TECLA: {tecla}")
+
+        # ======================================
+        # SIMULADOR DE PALMA
+        # ======================================
+
+        if self.modo_debug:
+
+            movimientos = {
+                "left": (-8, 0),
+                "right": (8, 0),
+                "up": (0, 8),
+                "down": (0, -8)
+            }
+
+            if tecla in movimientos:
+
+                horizontal, vertical = movimientos[tecla]
+
+                self.aplicar_rotacion(
+                    horizontal,
+                    vertical
+                )
+
+                return
+
+        # ======================================
+        # ROTACIÓN TRADICIONAL
+        # ======================================
+
+        movimientos = {
+            "a": (-5, 0),
+            "d": (5, 0),
+            "w": (0, 5),
+            "s": (0, -5)
+        }
+
+        if tecla in movimientos:
+
+            horizontal, vertical = movimientos[tecla]
+
+            self.aplicar_rotacion(
+                horizontal,
+                vertical
+            )
+
+            return
+
+        # ======================================
+        # ZOOM
+        # ======================================
+
+        if tecla == "i":
+
+            self.plotter.camera.Zoom(
+                self.velocidad_zoom
+            )
+
+            self.plotter.render()
+
+        elif tecla == "k":
+
+            self.plotter.camera.Zoom(
+                1 / self.velocidad_zoom
+            )
+
+            self.plotter.render()
+
 
     def tecla_liberada(self, obj, event):
 
         tecla = obj.GetKeySym().lower()
 
+        print(f"[DEBUG] TECLA LIBERADA: {tecla}")
+
         self.teclas_activas.discard(tecla)
 
+    def aplicar_rotacion(self, horizontal, vertical):
+
+        camara = self.plotter.camera
+
+        camara.Azimuth(horizontal)
+        camara.Elevation(vertical)
+
+        camara.OrthogonalizeViewUp()
+
+        self.plotter.render()
+
     
-    def actualizar_camara(self, obj, event):
+    def actualizar_camara(self, step):
+
+        if step % 60 == 0:
+            print(f"[DEBUG] TIMER ACTIVO - STEP: {step}")
 
         ahora = time.monotonic()
 
         dt = ahora - self.ultimo_tiempo
         self.ultimo_tiempo = ahora
 
-        dt = min(dt, 0.05)
+        dt = max(0.0, min(dt, 0.05))
 
         camara = self.plotter.camera
 
-        # ======================================
-        # CONTROL CON TECLADO
-        # ======================================
-
         horizontal = 0.0
         vertical = 0.0
+
+        # ======================================
+        # CONTROL CON TECLADO WASD
+        # ======================================
 
         if "a" in self.teclas_activas:
             horizontal -= self.velocidad_rotacion
@@ -248,10 +340,40 @@ class Graph3D:
             vertical -= self.velocidad_rotacion
 
         # ======================================
-        # CONTROL CON MEDIAPIPE
+        # SIMULADOR DE HAND TRACKING
         # ======================================
 
-        if self.usar_gestos:
+        if self.modo_debug:
+
+            if "left" in self.teclas_activas:
+                self.debug_x -= self.debug_speed * dt
+
+            if "right" in self.teclas_activas:
+                self.debug_x += self.debug_speed * dt
+
+            if "up" in self.teclas_activas:
+                self.debug_y -= self.debug_speed * dt
+
+            if "down" in self.teclas_activas:
+                self.debug_y += self.debug_speed * dt
+
+            self.debug_x = np.clip(self.debug_x, 0.0, 1.0)
+            self.debug_y = np.clip(self.debug_y, 0.0, 1.0)
+
+            yaw, pitch = self.camera_controller.update(
+                self.debug_x,
+                self.debug_y,
+                dt
+            )
+
+            horizontal += yaw * dt
+            vertical += pitch * dt
+
+        # ======================================
+        # CONTROL REAL CON MEDIAPIPE
+        # ======================================
+
+        elif self.usar_gestos:
 
             data = self.hand_tracker.get_data()
 
@@ -271,11 +393,12 @@ class Graph3D:
             else:
 
                 if self.mano_detectada:
+
                     self.camera_controller.reset()
                     self.mano_detectada = False
 
         # ======================================
-        # APLICAR MOVIMIENTO
+        # APLICAR ROTACIÓN
         # ======================================
 
         if horizontal != 0 or vertical != 0:
@@ -292,10 +415,12 @@ class Graph3D:
         # ======================================
 
         if "i" in self.teclas_activas:
+
             camara.Zoom(self.velocidad_zoom)
             self.plotter.render()
 
         if "k" in self.teclas_activas:
+
             camara.Zoom(1 / self.velocidad_zoom)
             self.plotter.render()
 
@@ -415,18 +540,29 @@ class Graph3D:
         )
 
         # Ayuda de controles
-        self.plotter.add_text(
+        ayuda = (
             "WASD: Rotacion continua\n"
-            "I / K: Zoom continuo\n"
+            "I / K: Zoom\n"
             "1-6: Vistas ortogonales\n"
             "0: Isometrica\n"
             "R: Restablecer\n"
-            "Mouse: Navegacion",
+        )
+
+        if self.modo_debug:
+            ayuda += (
+                "\nDEBUG - SIMULADOR DE MANO\n"
+                "Flechas: Mover palma virtual\n"
+                "Centro: Posicion neutral"
+            )
+        else:
+            ayuda += "Mouse: Navegacion"
+
+        self.plotter.add_text(
+            ayuda,
             position="lower_left",
             font_size=10,
             color="white"
         )
-
         # ======================================
         # CENTRO GEOMÉTRICO
         # ======================================
@@ -476,8 +612,10 @@ class Graph3D:
 
         self.vista_isometrica()
 
-        # Mostrar ventana
-        # Iniciar cámara antes de abrir el visor
+        # ======================================
+        # INICIAR TRACKER
+        # ======================================
+
         if self.usar_gestos:
             self.hand_tracker.start()
 
@@ -485,6 +623,7 @@ class Graph3D:
             self.plotter.show()
 
         finally:
+
             if self.usar_gestos:
                 self.hand_tracker.stop()
 

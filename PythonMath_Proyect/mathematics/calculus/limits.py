@@ -4,6 +4,11 @@ import sympy as sp
 from ..parser import convertir_expresion
 
 
+
+# ============================================================
+# CÁLCULO PRINCIPAL
+# ============================================================
+
 def calcular_limite(expresion, punto):
     x = sp.Symbol("x")
 
@@ -18,7 +23,9 @@ def calcular_limite(expresion, punto):
                 "No se pudo determinar el límite."
             )
 
-        pasos = generar_pasos(funcion, punto, x, resultado)
+        pasos = generar_pasos(
+            funcion, punto, x, resultado
+        )
 
         return funcion, punto, resultado, pasos
 
@@ -27,6 +34,10 @@ def calcular_limite(expresion, punto):
             f"No se pudo calcular el límite: {error}"
         ) from error
 
+
+# ============================================================
+# INTERPRETACIÓN DEL PUNTO
+# ============================================================
 
 def interpretar_punto(punto):
     punto = str(punto).strip().replace("^", "**")
@@ -44,12 +55,261 @@ def interpretar_punto(punto):
     if punto.lower() in valores:
         return valores[punto.lower()]
 
-    return sp.sympify(punto, locals={
-        "pi": sp.pi,
-        "oo": sp.oo,
-        "inf": sp.oo,
-    })
+    return sp.sympify(
+        punto,
+        locals={
+            "pi": sp.pi,
+            "oo": sp.oo,
+            "inf": sp.oo,
+        }
+    )
 
+
+# ============================================================
+# ANÁLISIS DE LÍMITES LATERALES
+# ============================================================
+
+
+def calcular_limite_lateral(funcion, x, punto, direccion):
+    """
+    Calcula un límite lateral y maneja explícitamente
+    las expresiones Piecewise.
+    """
+
+    if not isinstance(funcion, sp.Piecewise):
+        return sp.limit(
+            funcion,
+            x,
+            punto,
+            dir=direccion
+        )
+
+    epsilon = sp.Symbol(
+        "_epsilon",
+        positive=True
+    )
+
+    desplazamiento = (
+        -epsilon if direccion == "-" else epsilon
+    )
+
+    # Analizar las condiciones de cada rama
+    for expresion, condicion in funcion.args:
+
+        if condicion == sp.true:
+            return sp.limit(
+                expresion,
+                x,
+                punto,
+                dir=direccion
+            )
+
+        condicion_lateral = sp.simplify(
+            condicion.subs(
+                x,
+                punto + desplazamiento
+            )
+        )
+
+        if condicion_lateral == sp.true:
+            return sp.limit(
+                expresion,
+                x,
+                punto,
+                dir=direccion
+            )
+
+        if condicion_lateral == sp.false:
+            continue
+
+    # Respaldo para condiciones que no pudimos resolver
+    return sp.limit(
+        funcion,
+        x,
+        punto,
+        dir=direccion
+    )
+
+
+def analizar_comportamiento_limite(funcion, punto, x=None):
+    """
+    Analiza el comportamiento de una función alrededor
+    de un punto mediante límites laterales.
+
+    Clasificaciones:
+        - continua
+        - removible
+        - salto
+        - infinita
+        - oscilatoria_o_no_existente
+        - indeterminada
+
+    Retorna un diccionario con los resultados.
+    """
+
+    if x is None:
+        simbolos_x = [
+            simbolo
+            for simbolo in funcion.free_symbols
+            if simbolo.name == "x"
+        ]
+
+        x = simbolos_x[0] if simbolos_x else sp.Symbol("x")
+
+    punto = sp.sympify(punto)
+
+    if punto in (sp.oo, -sp.oo):
+        raise ValueError(
+            "El análisis lateral requiere un punto finito."
+        )
+
+    try:
+        # Límite por izquierda
+        limite_izquierdo = calcular_limite_lateral(
+            funcion,
+            x,
+            punto,
+            "-"
+        )
+
+        limite_derecho = calcular_limite_lateral(
+            funcion,
+            x,
+            punto,
+            "+"
+        )
+
+        # Valor de la función en el punto
+        valor_funcion = sp.simplify(
+            funcion.subs(x, punto)
+        )
+
+    except Exception as error:
+        raise ValueError(
+            f"No se pudieron calcular los límites laterales: {error}"
+        ) from error
+
+    # Comprobar si los resultados son válidos
+    if (
+        limite_izquierdo.has(sp.Limit)
+        or limite_derecho.has(sp.Limit)
+    ):
+        tipo = "indeterminada"
+        existe_limite = False
+
+    else:
+        tipo, existe_limite = clasificar_limite(
+            limite_izquierdo,
+            limite_derecho,
+            valor_funcion
+        )
+
+    # Detectar asíntota vertical
+    hay_asintota_vertical = (
+        es_infinito(limite_izquierdo)
+        or es_infinito(limite_derecho)
+    )
+
+    return {
+        "limite_izquierdo": limite_izquierdo,
+        "limite_derecho": limite_derecho,
+        "valor_funcion": valor_funcion,
+
+        "existe_limite": existe_limite,
+        "tipo": tipo,
+
+        "asintota_vertical": hay_asintota_vertical,
+
+        "punto": punto
+    }
+
+
+# ============================================================
+# CLASIFICACIÓN
+# ============================================================
+
+def clasificar_limite(
+    limite_izquierdo,
+    limite_derecho,
+    valor_funcion
+):
+    """
+    Compara los límites laterales y el valor de la función.
+    """
+
+    # Comprobar límites infinitos
+    if (
+        es_infinito(limite_izquierdo)
+        or es_infinito(limite_derecho)
+    ):
+        return "infinita", False
+
+    # Comprobar si ambos límites son finitos
+    if not (
+        es_finito(limite_izquierdo)
+        and es_finito(limite_derecho)
+    ):
+        return "indeterminada", False
+
+    # Comparar ambos límites
+    iguales = son_iguales(
+        limite_izquierdo,
+        limite_derecho
+    )
+
+    if not iguales:
+        return "salto", False
+
+    # Los límites laterales coinciden
+    limite_comun = limite_izquierdo
+
+    # Comprobar continuidad
+    if es_finito(valor_funcion) and son_iguales(
+        limite_comun,
+        valor_funcion
+    ):
+        return "continua", True
+
+    # El límite existe, pero la función no coincide
+    # con él en el punto o no está definida allí.
+    return "removible", True
+
+
+# ============================================================
+# UTILIDADES MATEMÁTICAS
+# ============================================================
+
+def es_infinito(valor):
+    valor = sp.sympify(valor)
+
+    return (
+        valor in (sp.oo, -sp.oo, sp.zoo)
+        or valor.is_infinite is True
+    )
+
+
+def es_finito(valor):
+    valor = sp.sympify(valor)
+
+    if valor.has(sp.zoo, sp.oo, -sp.oo, sp.nan):
+        return False
+
+    return valor.is_finite is True
+
+
+def son_iguales(a, b):
+    try:
+        diferencia = sp.simplify(a - b)
+
+        return diferencia == 0 or diferencia.is_zero is True
+
+    except Exception:
+        return False
+
+
+# ============================================================
+# GENERACIÓN DE PROCEDIMIENTOS
+# ============================================================
 
 def generar_pasos(funcion, punto, x, resultado):
     pasos = []
@@ -71,21 +331,26 @@ def generar_pasos(funcion, punto, x, resultado):
         ),
     })
 
-    # Límites en infinito: no hacemos sustitución directa.
     if punto in (sp.oo, -sp.oo):
         return generar_pasos_infinito(
             funcion, punto, x, resultado, pasos
         )
 
-    # Intentamos evaluar directamente.
-    valor_directo = sp.simplify(funcion.subs(x, punto))
+    valor_directo = sp.simplify(
+        funcion.subs(x, punto)
+    )
 
     numerador, denominador = sp.fraction(
         sp.together(funcion)
     )
 
-    valor_num = sp.simplify(numerador.subs(x, punto))
-    valor_den = sp.simplify(denominador.subs(x, punto))
+    valor_num = sp.simplify(
+        numerador.subs(x, punto)
+    )
+
+    valor_den = sp.simplify(
+        denominador.subs(x, punto)
+    )
 
     if valor_den != 0:
         pasos.append({
@@ -108,9 +373,8 @@ def generar_pasos(funcion, punto, x, resultado):
             "explicacion": (
                 "Al sustituir, el numerador y el denominador "
                 "dan cero. La expresión presenta la "
-                "indeterminación 0/0, por lo que no podemos "
-                "concluir que el límite sea cero. Debemos "
-                "transformar la expresión."
+                "indeterminación 0/0. Debemos transformar "
+                "la expresión antes de calcular el límite."
             ),
         })
 
@@ -125,10 +389,7 @@ def generar_pasos(funcion, punto, x, resultado):
             ),
             "explicacion": (
                 "Factorizamos el numerador y el denominador "
-                "para identificar factores comunes. "
-                "Esta transformación permite buscar una "
-                "expresión equivalente para x distinto "
-                "del punto de interés."
+                "para identificar factores comunes."
             ),
         })
 
@@ -143,10 +404,8 @@ def generar_pasos(funcion, punto, x, resultado):
                     rf" = {sp.latex(simplificada)}"
                 ),
                 "explicacion": (
-                    "Cancelamos los factores comunes del "
-                    "numerador y el denominador. La expresión "
-                    "simplificada coincide con la original "
-                    "donde ambas están definidas, y nos permite "
+                    "Cancelamos los factores comunes. "
+                    "La expresión simplificada permite "
                     "calcular el límite con mayor facilidad."
                 ),
             })
@@ -165,9 +424,7 @@ def generar_pasos(funcion, punto, x, resultado):
                     ),
                     "explicacion": (
                         "Evaluamos la expresión simplificada "
-                        "en el punto indicado. Como ya no "
-                        "aparece la indeterminación inicial, "
-                        "obtenemos el valor del límite."
+                        "en el punto indicado."
                     ),
                 })
 
@@ -181,11 +438,9 @@ def generar_pasos(funcion, punto, x, resultado):
                 ),
                 "explicacion": (
                     "La factorización no ha permitido "
-                    "simplificar la expresión. Intentamos "
-                    "la regla de L'Hôpital: derivamos por "
-                    "separado el numerador y el denominador. "
-                    "Esta regla solo es válida si se cumplen "
-                    "sus condiciones y persiste la forma 0/0."
+                    "simplificar la expresión. Se puede "
+                    "intentar L'Hôpital si se cumplen "
+                    "sus condiciones."
                 ),
             })
 
@@ -201,9 +456,7 @@ def generar_pasos(funcion, punto, x, resultado):
                 ),
                 "explicacion": (
                     "Calculamos el límite del cociente de "
-                    "las derivadas. Si sigue existiendo una "
-                    "indeterminación, puede ser necesario "
-                    "aplicar L'Hôpital nuevamente."
+                    "las derivadas."
                 ),
             })
 
@@ -232,9 +485,7 @@ def generar_pasos(funcion, punto, x, resultado):
         "explicacion": (
             "Este es el resultado calculado para el límite. "
             "La expresión final resume el valor al que se "
-            "aproxima la función cuando x tiende al punto "
-            "indicado. Revisa los pasos anteriores para "
-            "comprender la transformación aplicada."
+            "aproxima la función cuando x tiende al punto."
         ),
     })
 
@@ -254,8 +505,7 @@ def generar_pasos_infinito(funcion, punto, x, resultado, pasos):
         "explicacion": (
             "Como x tiende al infinito, no sustituimos x "
             "por un número. Estudiamos cómo se comporta "
-            "la función cuando x crece sin límite en la "
-            "dirección indicada."
+            "la función cuando x crece sin límite."
         ),
     })
 

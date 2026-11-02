@@ -8,24 +8,40 @@ from ui.graph_view import GraphView
 from mathematics.graphics.graph_engine import generar_datos_3d
 from visualization.graph_3D import Graph3D
 from visualization.graph_3D import Graph3D, detectar_camara
+from ui.camera_view import CameraView
 
 
-# ─────────────────────────────────────────────
-# PALETA DE COLORES
-# ─────────────────────────────────────────────
+# ============================================================
+# PALETA CENTRALIZADA - MÓDULO CÁLCULO
+# ============================================================
 
-FONDO = "#0B1120"
-TARJETA = "#111C30"
-TARJETA_SECUNDARIA = "#17243B"
-AZUL = "#3B82F6"
-AZUL_HOVER = "#2563EB"
-TEXTO = "#F1F5F9"
-TEXTO_SECUNDARIO = "#94A3B8"
-BORDE = "#263650"
-VERDE = "#34D399"
-ROJO = "#F87171"
+from ui.theme import (
+    CALCULUS_BG as FONDO,
+    CALCULUS_CARD as TARJETA,
+    CALCULUS_CARD_SECONDARY as TARJETA_SECUNDARIA,
+    CALCULUS_ERROR_TEXT,
 
-FUENTE = "Poppins"
+    CALCULUS_PRIMARY as AZUL,
+    CALCULUS_PRIMARY_HOVER as AZUL_HOVER,
+
+    CALCULUS_TEXT as TEXTO,
+    CALCULUS_TEXT_SECONDARY as TEXTO_SECUNDARIO,
+
+    CALCULUS_BORDER as BORDE,
+
+    CALCULUS_SUCCESS as VERDE,
+    CALCULUS_ERROR as ROJO,
+
+    FONT_FAMILY as FUENTE,
+
+    CALCULUS_GRAPH_2D as GRAPH_2D_COLOR,
+    CALCULUS_GRAPH_2D_HOVER as GRAPH_2D_HOVER,
+
+    CALCULUS_GRAPH_3D as GRAPH_3D_COLOR,
+    CALCULUS_GRAPH_3D_HOVER as GRAPH_3D_HOVER
+)
+
+from ui.theme import CALCULUS_ERROR_TEXT as ERROR_TEXT_COLOR
 
 
 class CalculusView:
@@ -189,8 +205,8 @@ class CalculusView:
             text="Graficar función y derivada",
             height=45,
             corner_radius=10,
-            fg_color="#17243B",
-            hover_color="#263650",
+            fg_color= TARJETA_SECUNDARIA,
+            hover_color= BORDE,
             text_color=TEXTO,
             font=(FUENTE, 14, "bold"),
             command=self.graficar
@@ -313,7 +329,6 @@ class CalculusView:
 
             self.mostrar_resultado(funcion, derivada)
             self.mostrar_pasos(pasos)
-            funcion, derivada, pasos = calcular_derivada(expresion)
             self.ultima_funcion = funcion
             self.ultima_derivada = derivada
 
@@ -614,38 +629,6 @@ class CalculusView:
             pady=12
         )
 
-    # ─────────────────────────────────────────
-    # MOSTRAR ERRORES
-    # ─────────────────────────────────────────
-
-    def mostrar_error(self, mensaje):
-        self.limpiar_frame(self.resultado_frame)
-        self.limpiar_frame(self.pasos)
-        self.imagenes.clear()
-
-        ctk.CTkLabel(
-            self.resultado_frame,
-            text="No se pudo completar el cálculo",
-            font=(FUENTE, 15, "bold"),
-            text_color=ROJO
-        ).pack(
-            anchor="w",
-            padx=10,
-            pady=(12, 5)
-        )
-
-        ctk.CTkLabel(
-            self.resultado_frame,
-            text=mensaje,
-            font=(FUENTE, 12),
-            text_color=TEXTO_SECUNDARIO,
-            wraplength=500,
-            justify="left"
-        ).pack(
-            anchor="w",
-            padx=10,
-            pady=(0, 15)
-        )
 
     # ─────────────────────────────────────────
     # UTILIDAD: LIMPIAR CONTENEDORES
@@ -681,7 +664,7 @@ class CalculusView:
         self.ventana_graficas = ctk.CTkToplevel(self.parent)
 
         self.ventana_graficas.title("Seleccionar visualización")
-        self.ventana_graficas.geometry("500x300")
+        self.ventana_graficas.geometry("720x320")
         self.ventana_graficas.configure(fg_color=FONDO)
 
         # Mantener encima de la aplicación
@@ -717,47 +700,82 @@ class CalculusView:
             text_color=TEXTO_SECUNDARIO
         ).pack(pady=(0, 25))
 
-        # Contenedor de botones
+
+        # ======================================
+        # CONTENEDOR DE BOTONES
+        # ======================================
+
         botones = ctk.CTkFrame(
             self.ventana_graficas,
             fg_color="transparent"
         )
 
-        botones.pack(fill="x", padx=25)
+        botones.pack(
+            fill="x",
+            padx=25,
+            pady=(0, 20)
+        )
 
-        # Botón 2D
+        # ======================================
+        # GRÁFICA 2D
+        # ======================================
+
         ctk.CTkButton(
             botones,
             text="GRÁFICA 2D",
-            height=100,
+            height=110,
             corner_radius=12,
-            fg_color="#172554",
-            hover_color="#1E40AF",
-            font=(FUENTE, 16, "bold"),
+            fg_color=GRAPH_2D_COLOR,
+            hover_color=GRAPH_2D_HOVER,
+            font=(FUENTE, 15, "bold"),
             command=self.abrir_grafica_2d
         ).pack(
             side="left",
             fill="both",
             expand=True,
-            padx=(0, 8)
+            padx=(0, 6)
         )
 
-        # Botón 3D
+        # ======================================
+        # GRÁFICA 3D
+        # ======================================
+
         ctk.CTkButton(
             botones,
             text="GRÁFICA 3D",
-            height=100,
+            height=110,
             corner_radius=12,
-            fg_color="#451A1A",
-            hover_color="#7F1D1D",
-            font=(FUENTE, 16, "bold"),
+            fg_color=GRAPH_3D_COLOR,
+            hover_color=GRAPH_3D_HOVER,
+            font=(FUENTE, 15, "bold"),
             command=self.abrir_grafica_3d
+        ).pack(
+            side="left",
+            fill="both",
+            expand=True,
+            padx=6
+        )
+
+        # ======================================
+        # CÁMARA AR
+        # ======================================
+
+        ctk.CTkButton(
+            botones,
+            text="CÁMARA AR",
+            height=110,
+            corner_radius=12,
+            fg_color="#164E63",
+            hover_color="#155E75",
+            font=(FUENTE, 15, "bold"),
+            command=self.abrir_camara_ar
         ).pack(
             side="right",
             fill="both",
             expand=True,
-            padx=(8, 0)
+            padx=(6, 0)
         )
+
 
     def abrir_grafica_2d(self):
 
@@ -783,8 +801,7 @@ class CalculusView:
             )
 
             visor = Graph3D(
-                usar_gestos=detectar_camara()
-            )
+                modo_debug=True)
 
             visor.mostrar_superficie(datos)
 
@@ -792,6 +809,35 @@ class CalculusView:
             messagebox.showerror(
                 "Error de visualización 3D",
                 f"No se pudo abrir el visor.\n\n{error}"
+            )
+    
+    def abrir_camara_ar(self):
+
+        try:
+
+            datos = generar_datos_3d(
+                self.ultima_funcion
+            )
+
+            ventana = ctk.CTkToplevel(self.parent)
+
+            ventana.title("Devil Math Cry - Realidad Aumentada")
+            ventana.geometry("1000x750")
+            ventana.configure(fg_color=FONDO)
+            ventana.minsize(700, 500)
+
+            visor = CameraView(
+                ventana,
+                datos
+            )
+
+            visor.iniciar()
+
+        except Exception as error:
+
+            messagebox.showerror(
+                "Error de cámara AR",
+                f"No se pudo iniciar la visualización.\n\n{error}"
             )
 
     def mostrar_error(self, mensaje):
@@ -802,15 +848,10 @@ class CalculusView:
             self.resultado_frame,
             text=mensaje,
             font=("Poppins", 14),
-            text_color="#FF6B6B",
+            text_color= ERROR_TEXT_COLOR,
             wraplength=500,
             justify="center"
         ).pack(
             padx=12,
             pady=15
         )
-
-    def limpiar_frame(self, frame):
-            """Elimina los widgets contenidos en un frame."""
-            for widget in frame.winfo_children():
-                widget.destroy()
