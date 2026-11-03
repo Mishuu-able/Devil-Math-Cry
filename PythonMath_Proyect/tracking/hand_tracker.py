@@ -34,6 +34,10 @@ class HandTracker:
             "frame": None
         }
 
+    # ======================================
+    # INICIAR TRACKER
+    # ======================================
+
     def start(self):
 
         if self.running:
@@ -48,6 +52,10 @@ class HandTracker:
 
         self.thread.start()
 
+    # ======================================
+    # DETENER TRACKER
+    # ======================================
+
     def stop(self):
 
         self.running = False
@@ -60,10 +68,18 @@ class HandTracker:
 
         self.thread = None
 
+    # ======================================
+    # OBTENER DATOS
+    # ======================================
+
     def get_data(self):
 
         with self.lock:
             return self.hand_data.copy()
+
+    # ======================================
+    # ACTUALIZAR DATOS
+    # ======================================
 
     def _set_data(
         self,
@@ -74,6 +90,7 @@ class HandTracker:
     ):
 
         with self.lock:
+
             self.hand_data = {
                 "detected": detected,
                 "x": x,
@@ -82,12 +99,17 @@ class HandTracker:
                 "frame": frame
             }
 
+    # ======================================
+    # LOOP PRINCIPAL
+    # ======================================
+
     def _tracking_loop(self):
 
         cap = None
 
         try:
 
+            # Configuración de MediaPipe
             options = vision.HandLandmarkerOptions(
                 base_options=python.BaseOptions(
                     model_asset_path=self.model_path
@@ -99,11 +121,14 @@ class HandTracker:
                 min_tracking_confidence=0.5
             )
 
+            # Abrir cámara
             cap = cv2.VideoCapture(self.camera_index)
 
             if not cap.isOpened():
+
                 print("ERROR: No se pudo abrir la cámara.")
                 return
+
             print("CÁMARA ABIERTA CORRECTAMENTE")
 
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
@@ -118,17 +143,24 @@ class HandTracker:
 
                 while self.running:
 
+                    # Obtener fotograma
                     ret, frame = cap.read()
-                    if not ret:
-                        print("ERROR: No se pudo obtener el fotograma.")
-                        continue
 
                     if not ret:
+
+                        print(
+                            "ERROR: No se pudo obtener el fotograma."
+                        )
+
                         time.sleep(0.01)
                         continue
 
+                    # Espejar cámara
                     frame = cv2.flip(frame, 1)
 
+                    height, width = frame.shape[:2]
+
+                    # Convertir a RGB
                     rgb = cv2.cvtColor(
                         frame,
                         cv2.COLOR_BGR2RGB
@@ -139,6 +171,7 @@ class HandTracker:
                         data=rgb
                     )
 
+                    # Timestamp creciente para MediaPipe
                     timestamp_ms = int(
                         (time.monotonic() - start_time) * 1000
                     )
@@ -150,6 +183,7 @@ class HandTracker:
 
                     last_timestamp = timestamp_ms
 
+                    # Detectar manos
                     result = detector.detect_for_video(
                         image,
                         timestamp_ms
@@ -159,6 +193,7 @@ class HandTracker:
 
                         hand = result.hand_landmarks[0]
 
+                        # Puntos de referencia de la palma
                         indices = [0, 5, 9, 13, 17]
 
                         center_x = sum(
@@ -169,26 +204,24 @@ class HandTracker:
                             hand[i].y for i in indices
                         ) / len(indices)
 
-                        height, width = frame.shape[:2]
-
-                        # Dibujar el esqueleto
+                        # Conexiones del esqueleto
                         connections = (
                             vision.HandLandmarksConnections.HAND_CONNECTIONS
                         )
 
                         for connection in connections:
 
-                            start = hand[connection.start]
-                            end = hand[connection.end]
+                            start_point = hand[connection.start]
+                            end_point = hand[connection.end]
 
                             p1 = (
-                                int(start.x * width),
-                                int(start.y * height)
+                                int(start_point.x * width),
+                                int(start_point.y * height)
                             )
 
                             p2 = (
-                                int(end.x * width),
-                                int(end.y * height)
+                                int(end_point.x * width),
+                                int(end_point.y * height)
                             )
 
                             cv2.line(
@@ -196,7 +229,8 @@ class HandTracker:
                                 p1,
                                 p2,
                                 (0, 255, 0),
-                                2
+                                2,
+                                cv2.LINE_AA
                             )
 
                         # Centro de la palma
@@ -208,23 +242,26 @@ class HandTracker:
                             (cx, cy),
                             10,
                             (255, 0, 255),
-                            -1
+                            -1,
+                            cv2.LINE_AA
                         )
 
+                        # Actualizar coordenadas normalizadas
                         self._set_data(
-                            True,
-                            center_x,
-                            center_y,
-                            frame
+                            detected=True,
+                            x=center_x,
+                            y=center_y,
+                            frame=frame
                         )
 
                     else:
 
                         self._set_data(
-                            False,
+                            detected=False,
                             frame=frame
                         )
 
+                    # Vista de depuración opcional
                     if self.show_preview:
 
                         cv2.imshow(
@@ -233,6 +270,7 @@ class HandTracker:
                         )
 
                         if cv2.waitKey(1) & 0xFF == 27:
+
                             self.running = False
                             break
 
@@ -242,12 +280,17 @@ class HandTracker:
 
         finally:
 
-            self._set_data(False)
-
             self.running = False
+
+            self._set_data(
+                detected=False,
+                frame=None
+            )
 
             if cap is not None:
                 cap.release()
 
             if self.show_preview:
                 cv2.destroyAllWindows()
+
+            print("HAND TRACKER DETENIDO")
