@@ -104,6 +104,7 @@ class HandTracker:
             if not cap.isOpened():
                 print("ERROR: No se pudo abrir la cámara.")
                 return
+            print("CÁMARA ABIERTA CORRECTAMENTE")
 
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
@@ -118,6 +119,9 @@ class HandTracker:
                 while self.running:
 
                     ret, frame = cap.read()
+                    if not ret:
+                        print("ERROR: No se pudo obtener el fotograma.")
+                        continue
 
                     if not ret:
                         time.sleep(0.01)

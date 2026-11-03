@@ -34,6 +34,8 @@ class ARSurfaceRenderer:
         Y = Y[::step, ::step]
         Z = Z[::step, ::step]
 
+        valid = valid[::step, ::step]
+
         # Centro geométrico
         valid = np.isfinite(X) & np.isfinite(Y) & np.isfinite(Z)
 

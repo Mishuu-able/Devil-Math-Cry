@@ -811,6 +811,7 @@ class CalculusView:
                 f"No se pudo abrir el visor.\n\n{error}"
             )
     
+    
     def abrir_camara_ar(self):
 
         try:
@@ -826,6 +827,13 @@ class CalculusView:
             ventana.configure(fg_color=FONDO)
             ventana.minsize(700, 500)
 
+            # Mantener la ventana asociada a la aplicación
+            ventana.transient(self.parent.winfo_toplevel())
+
+            # Mostrar delante de la ventana principal
+            ventana.lift()
+            ventana.focus_force()
+
             visor = CameraView(
                 ventana,
                 datos
@@ -839,6 +847,7 @@ class CalculusView:
                 "Error de cámara AR",
                 f"No se pudo iniciar la visualización.\n\n{error}"
             )
+
 
     def mostrar_error(self, mensaje):
         """Muestra un mensaje de error en el área de resultados."""
