@@ -796,13 +796,9 @@ class CalculusView:
         self.ventana_graficas.destroy()
 
         try:
-            datos = generar_datos_3d(
-                self.ultima_funcion
-            )
+            datos = generar_datos_3d(self.ultima_funcion)
 
-            visor = Graph3D(
-                modo_debug=True)
-
+            visor = Graph3D(modo_debug=True)
             visor.mostrar_superficie(datos)
 
         except Exception as error:
@@ -810,39 +806,29 @@ class CalculusView:
                 "Error de visualización 3D",
                 f"No se pudo abrir el visor.\n\n{error}"
             )
-    
-    
+
+
     def abrir_camara_ar(self):
 
-        try:
+        self.ventana_graficas.destroy()
 
-            datos = generar_datos_3d(
-                self.ultima_funcion
-            )
+        try:
+            datos = generar_datos_3d(self.ultima_funcion)
 
             ventana = ctk.CTkToplevel(self.parent)
-
             ventana.title("Devil Math Cry - Realidad Aumentada")
             ventana.geometry("1000x750")
             ventana.configure(fg_color=FONDO)
             ventana.minsize(700, 500)
 
-            # Mantener la ventana asociada a la aplicación
             ventana.transient(self.parent.winfo_toplevel())
-
-            # Mostrar delante de la ventana principal
             ventana.lift()
             ventana.focus_force()
 
-            visor = CameraView(
-                ventana,
-                datos
-            )
-
+            visor = CameraView(ventana, datos)
             visor.iniciar()
 
         except Exception as error:
-
             messagebox.showerror(
                 "Error de cámara AR",
                 f"No se pudo iniciar la visualización.\n\n{error}"

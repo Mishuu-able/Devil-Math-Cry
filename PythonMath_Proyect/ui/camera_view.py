@@ -27,7 +27,7 @@ class CameraView:
         self.objetivo_y = 0.0
 
         # Suavizado: cuanto menor, más suave
-        self.suavizado = 0.15
+        self.suavizado = 0.40
 
         self.tracker = HandTracker(
             model_path="hand_landmarker.task",
@@ -143,8 +143,8 @@ class CameraView:
             y = max(0.0, min(1.0, y))
 
             # Convertir posición de la mano en ángulos
-            self.objetivo_y = (x - 0.5) * 120
-            self.objetivo_x = (0.5 - y) * 90
+            self.objetivo_y = (x - 0.5) * 240
+            self.objetivo_x = (0.5 - y) * 180
 
         # Interpolación para evitar movimientos bruscos
         self.rotacion_x += (
