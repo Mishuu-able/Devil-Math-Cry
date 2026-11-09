@@ -87,7 +87,12 @@ class AIService:
             )
 
         except requests.exceptions.HTTPError as error:
-            raise Exception(f"Error HTTP: {error}")
+            detalle = response.text
+
+            raise Exception(
+                f"Error HTTP: {error}\n\n"
+                f"Respuesta del servidor:\n{detalle}"
+            )
 
         except ValueError:
             raise Exception(

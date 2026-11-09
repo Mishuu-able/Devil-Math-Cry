@@ -2,12 +2,17 @@
 import customtkinter as ctk
 import sympy as sp
 from ui.graph_view import GraphView
+from ui.camera_view import CameraView
+from mathematics.graphics.graph_engine import generar_datos_3d
+from visualization.graph_3D import Graph3D, detectar_camara
 
 from mathematics.calculus.limits import (
     calcular_limite,
     analizar_comportamiento_limite
 )
 from mathematics.renderer import expresion_a_imagen
+from ui.components.math_chat import MathChat
+from ui.components.graph_selector import GraphSelector
 
 
 # ============================================================
@@ -30,6 +35,13 @@ from ui.theme import (
     LIMITS_SUCCESS as VERDE,
     LIMITS_ERROR as ROJO,
 
+    FUNCTIONS_GRAPH_2D as GRAPH_2D_COLOR,
+    FUNCTIONS_GRAPH_2D_HOVER as GRAPH_2D_HOVER,
+    
+    FUNCTIONS_GRAPH_3D as GRAPH_3D_COLOR,
+    FUNCTIONS_GRAPH_3D_HOVER as GRAPH_3D_HOVER,
+    
+
     FONT_FAMILY as FUENTE
 )
 
@@ -41,6 +53,10 @@ class LimitsView:
         self.imagenes = []
         self.ultima_funcion = None
         self.ultimo_punto = None
+
+        self.ultimos_pasos = []
+        self.chat_rebellion = None
+
 
         self.crear_interfaz()
 
@@ -327,6 +343,23 @@ class LimitsView:
 
         self.mostrar_mensaje_inicial()
 
+        # ==============================================
+        # REBELLION - ASISTENTE MATEMÁTICO
+        # ==============================================
+
+        self.chat_rebellion = MathChat(
+            contenido,
+            contexto={}
+        )
+
+        self.chat_rebellion.configure(height=500)
+        self.chat_rebellion.pack_propagate(False)
+
+        self.chat_rebellion.pack(
+            fill="x",
+            pady=(10, 20)
+        )
+
     # ─────────────────────────────────────────
     # CALCULAR LÍMITE
     # ─────────────────────────────────────────
@@ -364,6 +397,15 @@ class LimitsView:
                 resultado
             )
             self.mostrar_pasos(pasos)
+
+            # Guardar información del límite
+            self.ultima_funcion = funcion
+            self.ultimo_punto = punto
+            self.ultimo_resultado = resultado
+            self.ultimos_pasos = pasos
+
+            # Enviar contexto a Rebellion
+            self.actualizar_contexto_rebellion()
 
         except Exception as error:
             self.mostrar_error(
@@ -687,6 +729,62 @@ class LimitsView:
             pady=(0, 15)
         )
 
+    # ==============================================
+    # CONTEXTO DE REBELLION
+    # ==============================================
+
+    def actualizar_contexto_rebellion(self):
+
+        if self.chat_rebellion is None:
+            return
+
+        if self.ultima_funcion is None:
+            return
+
+        pasos_texto = []
+
+        pasos = self.ultimos_pasos or []
+
+        if isinstance(pasos, str):
+            pasos = [pasos]
+
+        for indice, paso in enumerate(pasos, start=1):
+
+            if isinstance(paso, dict):
+
+                titulo = paso.get(
+                    "titulo",
+                    f"Paso {indice}"
+                )
+
+                formula = paso.get("formula", "")
+                explicacion = paso.get("explicacion", "")
+
+                texto = f"{titulo}\n"
+
+                if formula:
+                    texto += f"Fórmula: {formula}\n"
+
+                if explicacion:
+                    texto += f"Explicación: {explicacion}\n"
+
+                pasos_texto.append(texto)
+
+            else:
+                pasos_texto.append(str(paso))
+
+        contexto = {
+            "modulo": "Límites",
+            "funcion_original": str(self.ultima_funcion),
+            "variable": "x",
+            "punto_evaluacion": str(self.ultimo_punto),
+            "resultado_limite": str(self.ultimo_resultado),
+            "procedimiento": "\n\n".join(pasos_texto)
+        }
+
+        self.chat_rebellion.actualizar_contexto(contexto)
+
+
     # ─────────────────────────────────────────
     # UTILIDADES
     # ─────────────────────────────────────────
@@ -722,51 +820,42 @@ class LimitsView:
             )
             return
 
+        selector = GraphSelector(
+            self.parent,
+            fondo=FONDO,
+            texto=TEXTO,
+            texto_secundario=TEXTO_SECUNDARIO,
+            fuente=FUENTE,
+            color_2d=GRAPH_2D_COLOR,
+            hover_2d=GRAPH_2D_HOVER,
+            color_3d=GRAPH_2D_COLOR,
+            hover_3d=GRAPH_2D_HOVER,
+            on_2d=self.abrir_grafica_2d,
+            on_3d=self.abrir_grafica_3d,
+            on_ar=self.abrir_camara_ar,
+            descripcion="¿Cómo deseas explorar el comportamiento de la función?",
+        )
+        self.ventana_graficas = selector.ventana
+
+    def abrir_grafica_2d(self):
+        self.ventana_graficas.destroy()
+
         try:
             punto = self.ultimo_punto
 
-            # =================================================
-            # LÍMITES EN INFINITO
-            # =================================================
-
+            # Para límites en infinito se conserva la gráfica habitual.
             if punto in (sp.oo, -sp.oo):
-
                 GraphView(
                     self.parent,
                     [("Función", self.ultima_funcion)],
                     titulo="Comportamiento en el infinito"
                 )
-                
-
                 return
-
-            # =================================================
-            # ANALIZAR COMPORTAMIENTO
-            # =================================================
 
             analisis = analizar_comportamiento_limite(
                 self.ultima_funcion,
                 punto
             )
-
-            print("\n========== DEBUG LIMITS ==========")
-            print("Función guardada:", self.ultima_funcion)
-            print("Función simplificada:", sp.cancel(self.ultima_funcion))
-            print("Punto:", self.ultimo_punto)
-
-            print(
-                "Análisis:",
-                analizar_comportamiento_limite(
-                    self.ultima_funcion,
-                    self.ultimo_punto
-                )
-            )
-
-            print("=================================\n")
-
-            # =================================================
-            # ABRIR VISUALIZACIÓN
-            # =================================================
 
             GraphView(
                 self.parent,
@@ -777,10 +866,48 @@ class LimitsView:
 
         except Exception as error:
             from tkinter import messagebox
-
             messagebox.showerror(
                 "Error al graficar",
                 str(error)
             )
 
+    def abrir_grafica_3d(self):
+        self.ventana_graficas.destroy()
 
+        try:
+            datos = generar_datos_3d(self.ultima_funcion)
+            visor = Graph3D(usar_gestos=detectar_camara())
+            visor.mostrar_superficie(datos)
+
+        except Exception as error:
+            from tkinter import messagebox
+            messagebox.showerror(
+                "Error de visualización 3D",
+                f"No se pudo abrir el visor.\\n\\n{error}"
+            )
+
+    def abrir_camara_ar(self):
+        self.ventana_graficas.destroy()
+
+        try:
+            datos = generar_datos_3d(self.ultima_funcion)
+
+            ventana = ctk.CTkToplevel(self.parent)
+            ventana.title("Devil Math Cry - Realidad Aumentada")
+            ventana.geometry("1000x750")
+            ventana.configure(fg_color=FONDO)
+            ventana.minsize(700, 500)
+
+            ventana.transient(self.parent.winfo_toplevel())
+            ventana.lift()
+            ventana.focus_force()
+
+            visor = CameraView(ventana, datos)
+            visor.iniciar()
+
+        except Exception as error:
+            from tkinter import messagebox
+            messagebox.showerror(
+                "Error de cámara AR",
+                f"No se pudo iniciar la visualización.\\n\\n{error}"
+            )

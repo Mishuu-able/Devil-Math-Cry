@@ -1,6 +1,7 @@
 import customtkinter as ctk
 import sympy as sp
 from ui.graph_view import GraphView
+from ui.components.math_chat import MathChat
 
 from mathematics.algebra.operations import (
     simplificar,
@@ -65,6 +66,11 @@ class AlgebraView:
         self.ultima_expresion = None
         self.ultimo_resultado = None
         self.ultima_operacion = None
+
+        # Contexto para Rebellion
+        self.ultima_entrada = None
+        self.ultimos_pasos = []
+        self.chat_rebellion = None
 
         self.crear_interfaz()
 
@@ -390,6 +396,23 @@ class AlgebraView:
         self.cambiar_operacion("Simplificar")
         self.mostrar_mensaje_inicial()
 
+        # ==============================================
+        # REBELLION - ASISTENTE MATEMÁTICO
+        # ==============================================
+
+        self.chat_rebellion = MathChat(
+            contenido,
+            contexto={}
+        )
+
+        self.chat_rebellion.configure(height=500)
+        self.chat_rebellion.pack_propagate(False)
+
+        self.chat_rebellion.pack(
+            fill="x",
+            pady=(10, 20)
+        )
+
     # ─────────────────────────────────────────
     # CAMBIAR OPERACIÓN
     # ─────────────────────────────────────────
@@ -522,6 +545,12 @@ class AlgebraView:
             self.mostrar_pasos(pasos)
             self.ultimo_resultado = resultado
             self.ultima_operacion = operacion
+
+            # Guardar información para Rebellion
+            self.ultima_entrada = entrada_original
+            self.ultimos_pasos = pasos
+
+            self.actualizar_contexto_rebellion()
 
         except Exception as error:
 
@@ -909,6 +938,62 @@ class AlgebraView:
             pady=(0, 15)
         )
 
+    # ==============================================
+    # CONTEXTO DE REBELLION
+    # ==============================================
+
+    def actualizar_contexto_rebellion(self):
+
+        if self.chat_rebellion is None:
+            return
+
+        if self.ultima_entrada is None:
+            return
+
+        # Convertir el procedimiento a texto
+        pasos_texto = []
+
+        pasos = self.ultimos_pasos
+
+        if isinstance(pasos, str):
+            pasos_texto.append(pasos)
+
+        else:
+            for indice, paso in enumerate(pasos, start=1):
+
+                if isinstance(paso, dict):
+
+                    titulo = paso.get(
+                        "titulo",
+                        f"Paso {indice}"
+                    )
+
+                    formula = paso.get("formula", "")
+                    explicacion = paso.get("explicacion", "")
+
+                    texto = f"{titulo}\n"
+
+                    if formula:
+                        texto += f"Fórmula: {formula}\n"
+
+                    if explicacion:
+                        texto += f"{explicacion}\n"
+
+                    pasos_texto.append(texto)
+
+                else:
+                    pasos_texto.append(str(paso))
+
+        contexto = {
+            "modulo": "Álgebra",
+            "operacion": self.ultima_operacion,
+            "expresion_original": str(self.ultima_entrada),
+            "resultado": str(self.ultimo_resultado),
+            "procedimiento": "\n\n".join(pasos_texto)
+        }
+
+        self.chat_rebellion.actualizar_contexto(contexto)
+
     # ─────────────────────────────────────────
     # UTILIDADES
     # ─────────────────────────────────────────
@@ -1008,80 +1093,22 @@ class AlgebraView:
 
         self.expresion_grafica = expresion
 
-        self.ventana_graficas = ctk.CTkToplevel(self.parent)
-
-        self.ventana_graficas.title("Seleccionar visualización")
-        self.ventana_graficas.geometry("500x300")
-        self.ventana_graficas.configure(fg_color=FONDO)
-
-        self.ventana_graficas.attributes("-topmost", True)
-        self.ventana_graficas.transient(self.parent)
-        self.ventana_graficas.grab_set()
-        self.ventana_graficas.resizable(False, False)
-
-        self.ventana_graficas.update_idletasks()
-
-        ancho = self.ventana_graficas.winfo_width()
-        alto = self.ventana_graficas.winfo_height()
-
-        x = (self.ventana_graficas.winfo_screenwidth() - ancho) // 2
-        y = (self.ventana_graficas.winfo_screenheight() - alto) // 2
-
-        self.ventana_graficas.geometry(
-            f"{ancho}x{alto}+{x}+{y}"
+        selector = GraphSelector(
+            self.parent,
+            fondo=FONDO,
+            texto=TEXTO,
+            texto_secundario=TEXTO_SECUNDARIO,
+            fuente=FUENTE,
+            color_2d=GRAPH_2D_COLOR,
+            hover_2d=GRAPH_2D_HOVER,
+            color_3d=GRAPH_3D_COLOR,
+            hover_3d=GRAPH_3D_HOVER,
+            on_2d=self.abrir_grafica_2d,
+            on_3d=self.abrir_grafica_3d,
+            on_ar=self.abrir_camara_ar,
+            descripcion="¿Cómo deseas explorar tu expresión?",
         )
-
-        ctk.CTkLabel(
-            self.ventana_graficas,
-            text="Seleccionar visualización",
-            font=(FUENTE, 22, "bold"),
-            text_color=TEXTO
-        ).pack(pady=(25, 5))
-
-        ctk.CTkLabel(
-            self.ventana_graficas,
-            text="¿Cómo deseas explorar tu expresión?",
-            font=(FUENTE, 13),
-            text_color=TEXTO_SECUNDARIO
-        ).pack(pady=(0, 25))
-
-        botones = ctk.CTkFrame(
-            self.ventana_graficas,
-            fg_color="transparent"
-        )
-        botones.pack(fill="x", padx=25)
-
-        ctk.CTkButton(
-            botones,
-            text="GRÁFICA 2D",
-            height=100,
-            corner_radius=12,
-            fg_color= GRAPH_2D_COLOR,
-            hover_color= GRAPH_2D_HOVER,
-            font=(FUENTE, 16, "bold"),
-            command=self.abrir_grafica_2d
-        ).pack(
-            side="left",
-            fill="both",
-            expand=True,
-            padx=(0, 8)
-        )
-
-        ctk.CTkButton(
-            botones,
-            text="GRÁFICA 3D",
-            height=100,
-            corner_radius=12,
-            fg_color= GRAPH_3D_COLOR,
-            hover_color= GRAPH_3D_HOVER,
-            font=(FUENTE, 16, "bold"),
-            command=self.abrir_grafica_3d
-        ).pack(
-            side="right",
-            fill="both",
-            expand=True,
-            padx=(8, 0)
-        )
+        self.ventana_graficas = selector.ventana
 
     def abrir_grafica_2d(self):
         self.ventana_graficas.destroy()
@@ -1117,4 +1144,30 @@ class AlgebraView:
             messagebox.showerror(
                 "Error de visualización 3D",
                 f"No se pudo abrir el visor.\n\n{error}"
+            )
+
+
+    def abrir_camara_ar(self):
+        self.ventana_graficas.destroy()
+
+        try:
+            datos = generar_datos_3d(self.expresion_grafica)
+
+            ventana = ctk.CTkToplevel(self.parent)
+            ventana.title("Devil Math Cry - Realidad Aumentada")
+            ventana.geometry("1000x750")
+            ventana.configure(fg_color=FONDO)
+            ventana.minsize(700, 500)
+
+            ventana.transient(self.parent.winfo_toplevel())
+            ventana.lift()
+            ventana.focus_force()
+
+            visor = CameraView(ventana, datos)
+            visor.iniciar()
+
+        except Exception as error:
+            messagebox.showerror(
+                "Error de cámara AR",
+                f"No se pudo iniciar la visualización.\\n\\n{error}"
             )

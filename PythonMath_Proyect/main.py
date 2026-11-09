@@ -1,11 +1,10 @@
-
 import customtkinter as ctk
 from ui.calculus_view import CalculusView
 from ui.limits_view import LimitsView
 from ui.algebra_view import AlgebraView
 from ui.functions_view import FunctionsView
 from ui.exercises_view import ExercisesView
-from ui.theme import BG_CONTENT, BG_MODULE
+from ui.theme import BG_CONTENT, BG_MODULE, MAIN_BG, MAIN_BUTTON
 
 
 # ============================================================
@@ -33,7 +32,8 @@ app.minsize(800, 500)
 
 main_container = ctk.CTkFrame(
     app,
-    corner_radius=0
+    corner_radius=0,
+    fg_color=MAIN_BG
 )
 
 main_container.pack(
@@ -49,7 +49,8 @@ main_container.pack(
 sidebar = ctk.CTkFrame(
     main_container,
     width=220,
-    corner_radius=0
+    corner_radius=0,
+    fg_color=MAIN_BG
 )
 
 sidebar.pack(
@@ -68,6 +69,7 @@ logo = ctk.CTkLabel(
     sidebar,
     text="Devil Math Cry",
     font=ctk.CTkFont(
+        family="Old English Text MT",
         size=26,
         weight="bold"
     )
@@ -81,7 +83,8 @@ logo.pack(
 subtitle = ctk.CTkLabel(
     sidebar,
     text="Matemáticas Universitarias",
-    font=ctk.CTkFont(size=11)
+    font=ctk.CTkFont(size=16,
+                     family= "Perpetua")
 )
 
 subtitle.pack(
@@ -146,6 +149,8 @@ boton_algebra = ctk.CTkButton(
     sidebar,
     text="Álgebra",
     height=45,
+    fg_color=MAIN_BUTTON,
+    hover_color=MAIN_BUTTON,
     command=mostrar_algebra
 )
 
@@ -160,6 +165,8 @@ boton_calculo = ctk.CTkButton(
     sidebar,
     text="Cálculo",
     height=45,
+    fg_color=MAIN_BUTTON,
+    hover_color=MAIN_BUTTON,
     command=mostrar_calculo
 )
 
@@ -174,6 +181,8 @@ boton_funciones = ctk.CTkButton(
     sidebar,
     text="Funciones",
     height=45,
+    fg_color=MAIN_BUTTON,
+    hover_color=MAIN_BUTTON,
     command=mostrar_funciones
 )
 
@@ -188,6 +197,8 @@ boton_ejercicios = ctk.CTkButton(
     sidebar,
     text="Ejercicios",
     height=45,
+    fg_color=MAIN_BUTTON,
+    hover_color=MAIN_BUTTON,
     command=mostrar_ejercicios
 )
 
@@ -200,6 +211,8 @@ boton_ejercicios.pack(
 boton_limites = ctk.CTkButton(
     sidebar,
     text="Límites",
+    fg_color=MAIN_BUTTON,
+    hover_color=MAIN_BUTTON,
     command=mostrar_limites
 )
 
@@ -243,7 +256,7 @@ header.pack(fill="x")
 titulo_contenido = ctk.CTkLabel(
     header,
     text="Bienvenido a Devil Math Cry",
-    font=ctk.CTkFont(size=32, weight="bold")
+    font=ctk.CTkFont(size=32, weight="bold", family= "Book Antiqua")
 )
 
 titulo_contenido.pack(pady=(30, 20))
@@ -255,7 +268,8 @@ descripcion = ctk.CTkLabel(
         "matemáticas universitarias.\n\n"
         "Selecciona un módulo del menú lateral."
     ),
-    font=ctk.CTkFont(size=18),
+    font=ctk.CTkFont(size=18,
+                     family= "Baskerville Old Face"),
     justify="center"
 )
 

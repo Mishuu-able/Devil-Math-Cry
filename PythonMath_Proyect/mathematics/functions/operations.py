@@ -1,10 +1,10 @@
-
+from ..parser import X
 import sympy as sp
 
 
 def operar_funciones(funcion_f, funcion_g, operacion):
 
-    x = sp.Symbol("x")
+    x = X
 
     if operacion == "Suma":
         resultado = sp.simplify(funcion_f + funcion_g)

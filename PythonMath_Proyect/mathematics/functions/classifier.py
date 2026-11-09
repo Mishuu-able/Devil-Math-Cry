@@ -1,10 +1,10 @@
-
+from ..parser import X
 import sympy as sp
 
 
 def clasificar_funcion(expresion):
 
-    x = sp.Symbol("x")
+    x = X
 
     componentes = []
 

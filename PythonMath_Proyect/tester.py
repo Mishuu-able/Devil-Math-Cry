@@ -1,42 +1,74 @@
-
-import customtkinter as ctk
 import sympy as sp
 
-from ui.graph_view import GraphView
+from mathematics.parser import convertir_expresion, X
+from mathematics.functions.evaluator import evaluar_funcion
+from mathematics.functions.analysis import analizar_funcion
+from mathematics.functions.operations import operar_funciones
+from mathematics.calculus.limits import calcular_limite
 
 
 # ============================================================
-# CONFIGURACIÓN
+# PRUEBA 1: IDENTIDAD DE LA VARIABLE
 # ============================================================
 
-ctk.set_appearance_mode("dark")
+print("\n--- IDENTIDAD DE X ---")
 
-root = ctk.CTk()
-root.geometry("400x200")
-root.title("Devil Math Cry - Graph Tests")
+expresion = convertir_expresion("sin(x)")
 
-x = sp.Symbol("x")
-
-
-# ============================================================
-# FUNCIONES DE PRUEBA
-# ============================================================
-
-funciones = [
-    ("Hueco", (x**2 - 4) / (x - 2)),
-    ("Salto", sp.Piecewise((0, x < 2), (1, True))),
-    ("Asíntota", 1 / (x - 2))
-]
+print("Expresión:", expresion)
+print("Variables:", expresion.free_symbols)
+print("¿Utiliza X compartida?", X in expresion.free_symbols)
 
 
 # ============================================================
-# ABRIR GRÁFICA
+# PRUEBA 2: EVALUACIÓN
 # ============================================================
 
-GraphView(
-    root,
-    funciones,
-    titulo="Prueba de discontinuidades"
+print("\n--- EVALUACIÓN ---")
+
+resultado = evaluar_funcion(
+    convertir_expresion("sin(x)"),
+    [0, sp.pi / 2]
 )
 
-root.mainloop()
+for dato in resultado:
+    print(dato)
+
+
+# ============================================================
+# PRUEBA 3: ANÁLISIS
+# ============================================================
+
+print("\n--- ANÁLISIS ---")
+
+funcion = convertir_expresion("cos(x)")
+
+print(analizar_funcion(funcion))
+
+
+# ============================================================
+# PRUEBA 4: OPERACIONES
+# ============================================================
+
+print("\n--- COMPOSICIÓN ---")
+
+f = convertir_expresion("sin(x)")
+g = convertir_expresion("2*x")
+
+resultado = operar_funciones(f, g, "f(g(x))")
+
+print(resultado["resultado"])
+
+
+# ============================================================
+# PRUEBA 5: LÍMITES
+# ============================================================
+
+print("\n--- LÍMITE ---")
+
+funcion, punto, limite, pasos = calcular_limite(
+    "sin(x)/x",
+    0
+)
+
+print("Resultado:", limite)

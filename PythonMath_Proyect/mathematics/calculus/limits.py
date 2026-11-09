@@ -1,7 +1,7 @@
 
 import sympy as sp
 
-from ..parser import convertir_expresion
+from ..parser import convertir_expresion, X
 
 
 
@@ -10,7 +10,7 @@ from ..parser import convertir_expresion
 # ============================================================
 
 def calcular_limite(expresion, punto):
-    x = sp.Symbol("x")
+    x = X
 
     try:
         funcion = convertir_expresion(expresion)
@@ -154,7 +154,7 @@ def analizar_comportamiento_limite(funcion, punto, x=None):
             if simbolo.name == "x"
         ]
 
-        x = simbolos_x[0] if simbolos_x else sp.Symbol("x")
+        x = simbolos_x[0] if simbolos_x else X
 
     punto = sp.sympify(punto)
 

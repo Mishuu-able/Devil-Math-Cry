@@ -1,5 +1,5 @@
-
 import sympy as sp
+from ..parser import X
 
 
 def evaluar_funcion(expresion, valores):
@@ -14,13 +14,13 @@ def evaluar_funcion(expresion, valores):
         Lista de resultados con sus pasos.
     """
 
-    x = sp.Symbol("x")
+    x = X
 
     resultados = []
 
     for valor in valores:
 
-        sustitucion = expresion.subs(x, valor)
+        sustitucion = expresion.subs(X, valor)
 
         resultado = sp.simplify(sustitucion)
 

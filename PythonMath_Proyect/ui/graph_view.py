@@ -2,6 +2,7 @@
 import customtkinter as ctk
 import matplotlib.pyplot as plt
 import sympy as sp
+import numpy as np
 
 from tkinter import filedialog
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -194,6 +195,16 @@ class GraphView:
 
         self.info_label.pack(side="left")
 
+        # Coordenadas del cursor
+        self.coordenadas_label = ctk.CTkLabel(
+            self.info_frame,
+            text="X: -- | Y: --",
+            font=("Consolas", 10),
+            text_color=VERDE
+        )
+
+        self.coordenadas_label.pack(side="right")
+
         # Eventos del ratón
         self.conectar_eventos()
 
@@ -227,6 +238,7 @@ class GraphView:
             ("+  Acercar", self.zoom_in),
             ("✥  Mover", self.activar_movimiento),
             ("⌂  Inicio", self.restablecer_vista),
+            ("⤢  Ajustar", self.autoajustar_ejes),
             ("☷  Elementos", self.alternar_menu_elementos),
             ("↓  Exportar", self.exportar_grafica)
         ]
@@ -525,19 +537,99 @@ class GraphView:
     # DIBUJAR FUNCIONES
     # ========================================================
 
+    
     def dibujar_funcion(self, nombre, expresion):
 
         datos = generar_datos_2d(expresion)
+
+        # ====================================================
+        # PREPARAR DATOS PARA EVITAR PICOS NUMÉRICOS
+        # ====================================================
+
+        valores_x = np.asarray(datos["x"], dtype=float)
+
+        valores_y = np.asarray(
+            datos["y"],
+            dtype=float
+        )
+
+        # Garantizar que X e Y tengan las mismas dimensiones.
+        valores_y = np.broadcast_to(
+            valores_y,
+            valores_x.shape
+        ).copy()
+
+        # ====================================================
+        # DISCONTINUIDAD DE sign(x) EN UNA DERIVADA
+        # ====================================================
+
+        puntos_abiertos_signo = []
+
+        if "derivada" in nombre.lower() and expresion.has(sp.sign):
+
+            variable = next(
+                iter(expresion.free_symbols),
+                sp.Symbol("x", real=True)
+            )
+
+            if valores_x[0] <= 0 <= valores_x[-1]:
+
+                limite_izquierdo = sp.limit(
+                    expresion, variable, 0, dir="-"
+                )
+
+                limite_derecho = sp.limit(
+                    expresion, variable, 0, dir="+"
+                )
+
+                puntos_abiertos_signo = [
+                    limite_izquierdo,
+                    limite_derecho
+                ]
+
+                # Insertar x=0 con un valor NaN para cortar la curva.
+                indice = np.searchsorted(valores_x, 0)
+
+                if (
+                    indice < len(valores_x)
+                    and np.isclose(valores_x[indice], 0)
+                ):
+                    valores_y[indice] = np.nan
+
+                else:
+                    valores_x = np.insert(valores_x, indice, 0)
+                    valores_y = np.insert(valores_y, indice, np.nan)
+
+        singularidades = datos["singularities"]
+
+        if len(valores_x) > 1 and singularidades:
+
+            paso_muestreo = np.median(np.diff(valores_x))
+            margen = paso_muestreo * 3.0
+
+            for punto in singularidades:
+
+                mascara = np.abs(valores_x - punto) <= margen
+                valores_y[mascara] = np.nan
+
+        # ====================================================
+        # DIBUJAR FUNCIÓN
+        # ====================================================
 
         indice_color = len(self.ax.lines) % len(
             COLORES_FUNCIONES
         )
 
         color = COLORES_FUNCIONES[indice_color]
+        # Dibujar asíntotas horizontales, oblicuas y polinómicas
+        self.dibujar_asintotas_racionales(
+            datos.get("asymptotes", {}),
+            color
+        )
 
         line, = self.ax.plot(
-            datos["x"],
-            datos["y"],
+            valores_x,
+            valores_y,
             label=nombre,
             linewidth=2.2,
             color=color
@@ -547,8 +639,17 @@ class GraphView:
             nombre, []
         ).append(line)
 
+        # Mostrar los límites laterales de la derivada.
+        for limite in puntos_abiertos_signo:
+
+            self.dibujar_punto_abierto(
+                0,
+                limite,
+                "Derivada no definida"
+            )
+
         # ====================================================
-        # DETECCIÓN AUTOMÁTICA
+        # ANALIZAR PUNTOS ESPECIALES
         # ====================================================
 
         if self.analisis_limite is None:
@@ -573,11 +674,23 @@ class GraphView:
 
                 try:
 
+                    # Recuperar precisión simbólica.
+                    # Ejemplo: 1.570796... -> pi/2
+                    punto_exacto = sp.nsimplify(
+                        punto,
+                        [sp.pi]
+                    )
+
                     analisis = analizar_comportamiento_limite(
                         expresion,
-                        punto,
+                        punto_exacto,
                         variable
                     )
+
+                    # El analizador determina si es:
+                    # - Asíntota vertical.
+                    # - Hueco.
+                    # - Discontinuidad de salto.
 
                     self.dibujar_analisis_punto(
                         analisis
@@ -592,6 +705,208 @@ class GraphView:
                     print(
                         f"No se pudo analizar x={punto}: {error}"
                     )
+
+        # ====================================================
+        # EXTREMOS DEL DOMINIO
+        # ====================================================
+
+        variable = next(
+            (
+                simbolo
+                for simbolo in expresion.free_symbols
+                if simbolo.name == "x"
+            ),
+            sp.Symbol("x", real=True)
+        )
+
+        self.dibujar_extremos_dominio(
+            datos.get("domain_extremes", []),
+            expresion,
+            variable,
+            singularidades + datos["discontinuities"]
+        )
+
+
+    # ========================================================
+    # EXTREMOS DEL DOMINIO
+    # ========================================================
+
+    def dibujar_extremos_dominio(
+        self,
+        extremos,
+        expresion,
+        variable,
+        puntos_analizados
+    ):
+
+        for extremo in extremos:
+
+            punto = extremo["x"]
+            lado = extremo["lado"]
+            incluido = extremo["incluido"]
+
+            # Evitar duplicar puntos ya analizados.
+            if any(
+                np.isclose(punto, especial)
+                for especial in puntos_analizados
+            ):
+                continue
+
+            try:
+
+                punto_exacto = sp.nsimplify(
+                    punto,
+                    [sp.pi]
+                )
+
+                # Evaluar el valor real si el extremo está incluido.
+                if incluido:
+
+                    valor = expresion.subs(
+                        variable,
+                        punto_exacto
+                    )
+
+                else:
+
+                    # Obtener el límite desde el lado del dominio.
+                    direccion = (
+                        "+"
+                        if lado == "derecho"
+                        else "-"
+                    )
+
+                    valor = sp.limit(
+                        expresion,
+                        variable,
+                        punto_exacto,
+                        dir=direccion
+                    )
+
+                # No dibujar puntos con valores infinitos.
+                if not self.es_valor_finito(valor):
+                    continue
+
+                valor = float(sp.N(valor))
+
+                if incluido:
+
+                    # Extremo cerrado.
+                    artista = self.ax.scatter(
+                        [punto],
+                        [valor],
+                        color=VERDE,
+                        edgecolors=VERDE,
+                        s=85,
+                        zorder=9,
+                        label="Extremo incluido"
+                    )
+
+                    self.marker_artists.append(artista)
+
+                else:
+
+                    # Extremo abierto.
+                    self.dibujar_punto_abierto(
+                        punto,
+                        valor,
+                        "Extremo no incluido"
+                    )
+
+            except (
+                TypeError,
+                ValueError,
+                NotImplementedError,
+                OverflowError
+            ) as error:
+
+                print(
+                    f"No se pudo dibujar el extremo "
+                    f"x={punto}: {error}"
+                )
+
+
+    # ========================================================
+    # ASÍNTOTAS DE FUNCIONES RACIONALES
+    # ========================================================
+
+    def dibujar_asintotas_racionales(self, asintotas, color):
+
+        if not asintotas:
+            return
+
+        x_min, x_max = self.ax.get_xlim()
+
+        valores_x = np.linspace(x_min, x_max, 500)
+
+        estilos = {
+            "horizontal": "--",
+            "oblicua": "-.",
+            "polinomica": ":"
+        }
+
+        etiquetas = {
+            "horizontal": "Asíntota horizontal",
+            "oblicua": "Asíntota oblicua",
+            "polinomica": "Asíntota polinómica"
+        }
+
+        for tipo, expresion in asintotas.items():
+
+            if expresion is None:
+                continue
+
+            try:
+
+                variable = next(
+                    iter(expresion.free_symbols),
+                    sp.Symbol("x")
+                )
+
+                funcion = sp.lambdify(
+                    variable,
+                    expresion,
+                    modules=["numpy"]
+                )
+
+                valores_y = np.asarray(
+                    funcion(valores_x),
+                    dtype=float
+                )
+
+                # Garantizar que Y tenga la misma cantidad de elementos que X.
+                valores_y = np.broadcast_to(
+                    valores_y,
+                    valores_x.shape
+                ).copy()
+
+                valores_y = np.where(
+                    np.isfinite(valores_y),
+                    valores_y,
+                    np.nan
+                )
+
+                artista, = self.ax.plot(
+                    valores_x,
+                    valores_y,
+                    color=color,
+                    linestyle=estilos[tipo],
+                    linewidth=1.7,
+                    alpha=0.85,
+                    label=etiquetas[tipo]
+                )
+
+                self.asymptote_artists.append(artista)
+
+            except (
+                TypeError,
+                ValueError,
+                NotImplementedError
+            ) as error:
+
+                print(
+                    f"No se pudo dibujar la asíntota {tipo}: {error}"
+                )
 
     # ========================================================
     # ANÁLISIS DE LÍMITES
@@ -637,7 +952,7 @@ class GraphView:
                 linestyle=":",
                 linewidth=1.5,
                 alpha=0.85,
-                label=f"x = {x:g}"
+                label="Punto de referencia"
             )
 
             self.reference_artists.append(artista)
@@ -936,6 +1251,68 @@ class GraphView:
         self.canvas.draw_idle()
 
     # ========================================================
+    # AUTOAJUSTE DE EJES
+    # ========================================================
+
+    def autoajustar_ejes(self):
+
+        valores_x = []
+        valores_y = []
+
+        # Obtener datos de las funciones visibles
+        for artistas in self.function_artists.values():
+
+            for artista in artistas:
+
+                if not artista.get_visible():
+                    continue
+
+                x, y = artista.get_data()
+
+                x = np.asarray(x, dtype=float)
+                y = np.asarray(y, dtype=float)
+
+                mascara = np.isfinite(x) & np.isfinite(y)
+
+                valores_x.extend(x[mascara])
+                valores_y.extend(y[mascara])
+
+        if not valores_x or not valores_y:
+            return
+
+        x_min = min(valores_x)
+        x_max = max(valores_x)
+
+        y_min = min(valores_y)
+        y_max = max(valores_y)
+
+        # Evitar rangos demasiado pequeños
+        rango_x = x_max - x_min
+        rango_y = y_max - y_min
+
+        if rango_x == 0:
+            rango_x = 2
+
+        if rango_y == 0:
+            rango_y = 2
+
+        # Añadir margen visual
+        margen_x = rango_x * 0.05
+        margen_y = rango_y * 0.10
+
+        self.ax.set_xlim(
+            x_min - margen_x,
+            x_max + margen_x
+        )
+
+        self.ax.set_ylim(
+            y_min - margen_y,
+            y_max + margen_y
+        )
+
+        self.canvas.draw_idle()
+
+    # ========================================================
     # MOVIMIENTO
     # ========================================================
 
@@ -1031,6 +1408,27 @@ class GraphView:
 
     def al_mover_ratón(self, evento):
 
+          # Actualizar coordenadas del cursor
+        if (
+            evento.inaxes == self.ax
+            and evento.xdata is not None
+            and evento.ydata is not None
+        ):
+
+            self.coordenadas_label.configure(
+                text=(
+                    f"X: {evento.xdata:.4f} | "
+                    f"Y: {evento.ydata:.4f}"
+                )
+            )
+
+        else:
+
+            self.coordenadas_label.configure(
+                text="X: -- | Y: --"
+            )
+
+        # Mantener el comportamiento de desplazamiento
         if not self.arrastrando:
             return
 

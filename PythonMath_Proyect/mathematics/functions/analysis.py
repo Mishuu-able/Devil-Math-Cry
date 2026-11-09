@@ -1,4 +1,4 @@
-
+from ..parser import X
 import sympy as sp
 
 from sympy.calculus.util import (
@@ -10,7 +10,7 @@ from sympy.calculus.util import (
 def analizar_dominio(expresion):
     """Calcula el dominio real de una función."""
 
-    x = sp.Symbol("x")
+    x = X
 
     try:
         return continuous_domain(
@@ -25,7 +25,7 @@ def analizar_dominio(expresion):
 def analizar_rango(expresion):
     """Calcula el recorrido real de una función."""
 
-    x = sp.Symbol("x")
+    x = X
 
     try:
         return function_range(
@@ -40,7 +40,7 @@ def analizar_rango(expresion):
 def analizar_raices(expresion):
     """Calcula las raíces reales de una función."""
 
-    x = sp.Symbol("x")
+    x = X
 
     try:
         return sp.solveset(
@@ -55,7 +55,7 @@ def analizar_raices(expresion):
 def analizar_interseccion_y(expresion):
     """Calcula la intersección con el eje Y."""
 
-    x = sp.Symbol("x")
+    x = X
 
     dominio = analizar_dominio(expresion)
 
@@ -76,7 +76,7 @@ def analizar_interseccion_y(expresion):
 def analizar_paridad(expresion):
     """Determina si una función es par, impar o ninguna."""
 
-    x = sp.Symbol("x")
+    x = X
 
     diferencia_par = sp.simplify(
         expresion.subs(x, -x) - expresion
@@ -118,7 +118,7 @@ def generar_explicaciones(expresion, analisis):
     calculadas de una función.
     """
 
-    x = sp.Symbol("x")
+    x = X
 
     explicaciones = {}
 

@@ -104,7 +104,7 @@ class ExercisesView(ctk.CTkFrame):
             pady=(0, 25)
         )
 
-        self.chat_tab = self.tabs.add("YAMATO")
+        self.chat_tab = self.tabs.add("REBELLION")
         self.practice_tab = self.tabs.add("PRACTICE MODE")
 
         self.crear_chat()
@@ -192,7 +192,14 @@ class ExercisesView(ctk.CTkFrame):
                 "universidad"
             ],
             width=150,
-            height=35
+            height=35,
+            fg_color=TARJETA,
+            button_color=ROJO,
+            button_hover_color=ROJO_HOVER,
+            dropdown_fg_color=TARJETA,
+            dropdown_hover_color=ROJO_HOVER,
+            dropdown_text_color=TEXTO,
+            text_color=BLANCO
         )
         self.nivel_selector.set("universidad")
         self.nivel_selector.pack(
@@ -207,7 +214,14 @@ class ExercisesView(ctk.CTkFrame):
                 "respuesta"
             ],
             width=160,
-            height=35
+            height=35,
+            fg_color=TARJETA,
+            button_color=ROJO,
+            button_hover_color=ROJO_HOVER,
+            dropdown_fg_color=TARJETA,
+            dropdown_hover_color=ROJO_HOVER,
+            dropdown_text_color=TEXTO,
+            text_color=BLANCO
         )
         self.modo_selector.set("procedimiento")
         self.modo_selector.pack(side="left")
@@ -485,7 +499,14 @@ class ExercisesView(ctk.CTkFrame):
                 "dificil"
             ],
             width=150,
-            height=35
+            height=35,
+            fg_color=TARJETA,
+            button_color=ROJO,
+            button_hover_color=ROJO_HOVER,
+            dropdown_fg_color=TARJETA,
+            dropdown_hover_color=ROJO_HOVER,
+            dropdown_text_color=TEXTO,
+            text_color=BLANCO
         )
         self.difficulty_selector.set("facil")
         self.difficulty_selector.pack(

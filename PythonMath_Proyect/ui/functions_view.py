@@ -5,7 +5,7 @@ import sympy as sp
 
 from tkinter import messagebox
 
-from mathematics.parser import convertir_expresion
+from mathematics.parser import convertir_expresion, X
 from mathematics.functions.evaluator import evaluar_funcion
 from mathematics.functions.analysis import (
     analizar_funcion,
@@ -23,6 +23,8 @@ from mathematics.functions.classifier import (
 )
 
 from ui.graph_view import GraphView
+from ui.components.graph_selector import GraphSelector
+from ui.camera_view import CameraView
 from mathematics.graphics.graph_engine import generar_datos_3d
 from visualization.graph_3D import Graph3D, detectar_camara
 
@@ -50,6 +52,9 @@ from ui.theme import (
     FONT_FAMILY as FUENTE
 )
 
+from ui.components.math_chat import MathChat
+from mathematics.renderer import expresion_a_imagen
+from PIL import Image
 
 class FunctionsView:
 
@@ -57,6 +62,10 @@ class FunctionsView:
 
         self.parent = parent
         self.funcion = None
+
+        # Contexto de Rebellion
+        self.chat_rebellion = None
+        self.ultimo_contexto = {}
 
         self.crear_interfaz()
 
@@ -128,6 +137,24 @@ class FunctionsView:
         self.crear_resultados()
         self.crear_operaciones()
         self.crear_boton_graficar()
+
+        # ==========================================
+        # REBELLION - ASISTENTE MATEMÁTICO
+        # ==========================================
+
+        self.chat_rebellion = MathChat(
+            self.panel,
+            contexto={}
+        )
+
+        self.chat_rebellion.configure(height=500)
+        self.chat_rebellion.pack_propagate(False)
+
+        self.chat_rebellion.pack(
+            fill="x",
+            padx=20,
+            pady=(10, 20)
+        )
 
     # ==========================================
     # ENTRADA DE FUNCIÓN
@@ -320,17 +347,14 @@ class FunctionsView:
 
             funcion = convertir_expresion(texto_funcion)
 
-            # Validar que solo dependa de x.
-            x = sp.Symbol("x")
-
-            if funcion.free_symbols - {x}:
+            if funcion.free_symbols - {X}:
 
                 raise ValueError(
                     "Por ahora solo se admiten funciones de una variable: x."
                 )
 
             valores = [
-                float(valor.strip())
+                convertir_expresion(valor.strip())
                 for valor in texto_valores.split(",")
             ]
 
@@ -360,12 +384,100 @@ class FunctionsView:
                 clasificacion,
                 explicacion_clasificacion)
 
+            # Actualizar contexto de Rebellion
+
+            self.ultimo_contexto = {
+                "modulo": "Funciones",
+                "tipo_operacion": "Evaluación y análisis",
+                "funcion_original": texto_funcion,
+                "funcion_simbolica": str(funcion),
+                "valores_evaluados": str(valores),
+                "resultados_evaluacion": str(resultados),
+                "clasificacion": str(clasificacion),
+                "dominio": str(analisis.get("dominio")),
+                "rango": str(analisis.get("rango")),
+                "raices": str(analisis.get("raices")),
+                "interseccion_y": str(analisis.get("interseccion_y")),
+                "paridad": str(analisis.get("paridad")),
+                "procedimiento": str(explicaciones)
+            }
+
+            self.actualizar_contexto_rebellion()
+
         except Exception as error:
 
             messagebox.showerror(
                 "Error matemático",
                 str(error)
             )
+
+    def crear_imagen_matematica(
+        self,
+        contenedor,
+        expresion,
+        fontsize=24,
+        max_width=650,
+        color="#F5F5F5",
+        side="top",
+        pady=3
+    ):
+        """Renderiza una expresión SymPy como imagen matemática compacta."""
+
+        imagen = expresion_a_imagen(
+            expresion,
+            fontsize=fontsize,
+            dpi=180
+        )
+
+        # Recortar el espacio transparente que deja Matplotlib.
+        bbox = imagen.getbbox()
+        if bbox:
+            imagen = imagen.crop(bbox)
+
+        # Aplicar un color legible conservando la transparencia.
+        alpha = imagen.getchannel("A")
+        imagen_color = Image.new("RGBA", imagen.size, color)
+        imagen_color.putalpha(alpha)
+        imagen = imagen_color
+
+        # Limitar el tamaño para evitar desbordamientos.
+        factor = min(
+            1,
+            max_width / max(imagen.width, 1),
+            85 / max(imagen.height, 1)
+        )
+
+        if factor < 1:
+            imagen = imagen.resize(
+                (
+                    max(1, int(imagen.width * factor)),
+                    max(1, int(imagen.height * factor))
+                ),
+                Image.Resampling.LANCZOS
+            )
+
+        imagen_ctk = ctk.CTkImage(
+            light_image=imagen,
+            dark_image=imagen,
+            size=imagen.size
+        )
+
+        etiqueta = ctk.CTkLabel(
+            contenedor,
+            text="",
+            image=imagen_ctk,
+            fg_color="transparent"
+        )
+        etiqueta.image = imagen_ctk
+
+        etiqueta.pack(
+            side=side,
+            anchor="center",
+            padx=8,
+            pady=pady
+        )
+
+        return etiqueta
 
     # ==========================================
     # MOSTRAR RESULTADOS
@@ -475,11 +587,6 @@ class FunctionsView:
                 pady=4
             )
 
-        ctk.CTkFrame(
-            clasificacion_card,
-            height=5,
-            fg_color="transparent"
-        ).pack()
 
 
         # EVALUACIONES
@@ -497,36 +604,44 @@ class FunctionsView:
 
         for resultado in resultados:
 
+            valor = resultado["valor_x"]
+            resultado_final = resultado["resultado"]
+
             tarjeta = ctk.CTkFrame(
                 self.resultados,
                 fg_color=TARJETA_SECUNDARIA,
                 corner_radius=10
             )
-
             tarjeta.pack(
                 fill="x",
                 pady=5
             )
 
-            valor = resultado["valor_x"]
-            sustitucion = resultado["sustitucion"]
-            resultado_final = resultado["resultado"]
+            # Mostrar la entrada exacta y el resultado.
+            formula = sp.Eq(
+                sp.Function("f")(valor),
+                resultado_final,
+                evaluate=False
+            )
 
-            texto = (
-                f"f({valor}) = {sustitucion}\n"
-                f"Resultado = {resultado_final}"
+            self.crear_imagen_matematica(
+                tarjeta,
+                formula,
+                fontsize=25,
+                max_width=650,
+                color="#F5F5F5",
+                pady=(10, 5)
             )
 
             ctk.CTkLabel(
                 tarjeta,
-                text=texto,
-                font=(FUENTE, 13),
-                text_color=TEXTO,
-                justify="left"
+                text=f"Resultado: {sp.sstr(resultado_final)}",
+                font=(FUENTE, 14, "bold"),
+                text_color=VERDE
             ).pack(
                 anchor="w",
                 padx=15,
-                pady=12
+                pady=(2, 10)
             )
 
         # ANÁLISIS MATEMÁTICO
@@ -567,26 +682,19 @@ class FunctionsView:
                 fg_color=TARJETA_SECUNDARIA,
                 corner_radius=10
             )
-
             tarjeta.pack(
                 fill="x",
                 pady=4
             )
 
-            if valor is None:
-                texto_valor = "No se pudo determinar automáticamente."
-            else:
-                texto_valor = str(valor)
-
             fila = ctk.CTkFrame(
                 tarjeta,
                 fg_color="transparent"
             )
-
             fila.pack(
                 fill="x",
                 padx=15,
-                pady=12
+                pady=8
             )
 
             ctk.CTkLabel(
@@ -595,19 +703,37 @@ class FunctionsView:
                 font=(FUENTE, 13, "bold"),
                 text_color=TEXTO
             ).pack(
-                side="left"
+                side="left",
+                anchor="center"
             )
 
-            ctk.CTkLabel(
-                fila,
-                text=texto_valor,
-                font=(FUENTE, 13),
-                text_color=VERDE if valor is not None else ROJO
-            ).pack(
-                side="right"
-            )
+            if valor is None:
+                ctk.CTkLabel(
+                    fila,
+                    text="No se pudo determinar automáticamente.",
+                    font=(FUENTE, 12),
+                    text_color=ROJO
+                ).pack(side="right")
 
-            
+            elif isinstance(valor, str):
+                ctk.CTkLabel(
+                    fila,
+                    text=valor,
+                    font=(FUENTE, 13),
+                    text_color=VERDE
+                ).pack(side="right")
+
+            else:
+                self.crear_imagen_matematica(
+                    fila,
+                    valor,
+                    fontsize=17,
+                    max_width=450,
+                    color="#16D978",
+                    side="right",
+                    pady=2
+                )
+
         # ======================================
         # PROCEDIMIENTOS MATEMÁTICOS
         # ======================================
@@ -851,10 +977,8 @@ class FunctionsView:
             f = convertir_expresion(texto_f)
             g = convertir_expresion(texto_g)
 
-            x = sp.Symbol("x")
-
-            # Comprobar que ambas sean funciones de x.
-            if f.free_symbols - {x} or g.free_symbols - {x}:
+            # Comprobar que ambas sean funciones de la variable compartida X.
+            if f.free_symbols - {X} or g.free_symbols - {X}:
 
                 raise ValueError(
                     "Solo se admiten funciones de una variable: x."
@@ -871,6 +995,22 @@ class FunctionsView:
             pasos = generar_procedimiento(datos)
 
             self.mostrar_operacion(datos, pasos)
+
+            # Actualizar contexto de Rebellion
+
+            self.ultimo_contexto = {
+                "modulo": "Funciones",
+                "tipo_operacion": "Operaciones entre funciones",
+                "primera_funcion": str(datos["funcion_f"]),
+                "segunda_funcion": str(datos["funcion_g"]),
+                "operacion": self.selector_operacion.get(),
+                "resultado": str(datos["resultado"]),
+                "procedimiento": "\n".join(
+                    str(paso) for paso in pasos
+                )
+            }
+
+            self.actualizar_contexto_rebellion()
 
         except Exception as error:
 
@@ -984,81 +1124,22 @@ class FunctionsView:
             )
             return
 
-        self.ventana_graficas = ctk.CTkToplevel(self.parent)
-
-        self.ventana_graficas.title("Seleccionar visualización")
-        self.ventana_graficas.geometry("500x300")
-        self.ventana_graficas.configure(fg_color=FONDO)
-
-        self.ventana_graficas.attributes("-topmost", True)
-        self.ventana_graficas.transient(self.parent)
-        self.ventana_graficas.grab_set()
-        self.ventana_graficas.resizable(False, False)
-
-        # Centrar ventana
-        self.ventana_graficas.update_idletasks()
-
-        ancho = self.ventana_graficas.winfo_width()
-        alto = self.ventana_graficas.winfo_height()
-
-        x = (self.ventana_graficas.winfo_screenwidth() - ancho) // 2
-        y = (self.ventana_graficas.winfo_screenheight() - alto) // 2
-
-        self.ventana_graficas.geometry(
-            f"{ancho}x{alto}+{x}+{y}"
+        selector = GraphSelector(
+            self.parent,
+            fondo=FONDO,
+            texto=TEXTO,
+            texto_secundario=TEXTO_SECUNDARIO,
+            fuente=FUENTE,
+            color_2d=GRAPH_2D_COLOR,
+            hover_2d=GRAPH_2D_HOVER,
+            color_3d=GRAPH_3D_COLOR,
+            hover_3d=GRAPH_3D_HOVER,
+            on_2d=self.abrir_grafica_2d,
+            on_3d=self.abrir_grafica_3d,
+            on_ar=self.abrir_camara_ar,
+            descripcion="¿Cómo deseas explorar tu función?",
         )
-
-        ctk.CTkLabel(
-            self.ventana_graficas,
-            text="Seleccionar visualización",
-            font=(FUENTE, 22, "bold"),
-            text_color=TEXTO
-        ).pack(pady=(25, 5))
-
-        ctk.CTkLabel(
-            self.ventana_graficas,
-            text="¿Cómo deseas explorar tu función?",
-            font=(FUENTE, 13),
-            text_color=TEXTO_SECUNDARIO
-        ).pack(pady=(0, 25))
-
-        botones = ctk.CTkFrame(
-            self.ventana_graficas,
-            fg_color="transparent"
-        )
-        botones.pack(fill="x", padx=25)
-
-        ctk.CTkButton(
-            botones,
-            text="GRÁFICA 2D",
-            height=100,
-            corner_radius=12,
-            fg_color= GRAPH_2D_COLOR,
-            hover_color= GRAPH_2D_HOVER,
-            font=(FUENTE, 16, "bold"),
-            command=self.abrir_grafica_2d
-        ).pack(
-            side="left",
-            fill="both",
-            expand=True,
-            padx=(0, 8)
-        )
-
-        ctk.CTkButton(
-            botones,
-            text="GRÁFICA 3D",
-            height=100,
-            corner_radius=12,
-            fg_color= GRAPH_3D_COLOR,
-            hover_color= GRAPH_3D_HOVER,
-            font=(FUENTE, 16, "bold"),
-            command=self.abrir_grafica_3d
-        ).pack(
-            side="right",
-            fill="both",
-            expand=True,
-            padx=(8, 0)
-        )
+        self.ventana_graficas = selector.ventana
 
     def abrir_grafica_2d(self):
         self.ventana_graficas.destroy()
@@ -1091,3 +1172,40 @@ class FunctionsView:
                 "Error de visualización 3D",
                 f"No se pudo abrir el visor.\n\n{error}"
             )
+    def abrir_camara_ar(self):
+        self.ventana_graficas.destroy()
+
+        try:
+            datos = generar_datos_3d(self.funcion)
+
+            ventana = ctk.CTkToplevel(self.parent)
+            ventana.title("Devil Math Cry - Realidad Aumentada")
+            ventana.geometry("1000x750")
+            ventana.configure(fg_color=FONDO)
+            ventana.minsize(700, 500)
+
+            ventana.transient(self.parent.winfo_toplevel())
+            ventana.lift()
+            ventana.focus_force()
+
+            visor = CameraView(ventana, datos)
+            visor.iniciar()
+
+        except Exception as error:
+            messagebox.showerror(
+                "Error de cámara AR",
+                f"No se pudo iniciar la visualización.\\n\\n{error}"
+            )
+
+    # ==========================================
+    # CONTEXTO DE REBELLION
+    # ==========================================
+
+    def actualizar_contexto_rebellion(self):
+
+        if self.chat_rebellion is None:
+            return
+
+        self.chat_rebellion.actualizar_contexto(
+            self.ultimo_contexto
+        )

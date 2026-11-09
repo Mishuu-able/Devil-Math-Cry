@@ -9,6 +9,8 @@ from mathematics.graphics.graph_engine import generar_datos_3d
 from visualization.graph_3D import Graph3D
 from visualization.graph_3D import Graph3D, detectar_camara
 from ui.camera_view import CameraView
+from ui.components.math_chat import MathChat
+from ui.components.graph_selector import GraphSelector
 
 
 # ============================================================
@@ -50,6 +52,10 @@ class CalculusView:
         self.imagenes = []
         self.ultima_funcion = None
         self.ultima_derivada = None
+        self.ultimo_orden = 1
+        self.ultimos_pasos = []
+
+        self.chat_rebellion = None
 
         self.crear_interfaz()
 
@@ -88,7 +94,7 @@ class CalculusView:
 
         ctk.CTkLabel(
             encabezado,
-            text="Calcula derivadas y comprende el procedimiento paso a paso.",
+            text="Calcula derivadas sucesivas y comprende el procedimiento paso a paso.",
             font=(FUENTE, 13),
             text_color=TEXTO_SECUNDARIO
         ).pack(
@@ -96,7 +102,7 @@ class CalculusView:
             pady=(5, 0)
         )
 
-        # ÚNICO contenedor desplazable
+        # ÚNICO contenedor desplazable del módulo
         self.panel = ctk.CTkScrollableFrame(
             self.contenedor,
             fg_color=FONDO,
@@ -104,6 +110,7 @@ class CalculusView:
             scrollbar_button_color=AZUL,
             scrollbar_button_hover_color=AZUL_HOVER
         )
+
         self.panel.pack(
             fill="both",
             expand=True,
@@ -151,7 +158,7 @@ class CalculusView:
 
         ctk.CTkLabel(
             entrada_card,
-            text="Escribe una función de x. Por ejemplo: x^2 + 3x + 2",
+            text="Escribe una función de x. Ejemplos: x^2 + 3x + 2, sin^2(x), cos^3(x)",
             font=(FUENTE, 12),
             text_color=TEXTO_SECUNDARIO
         ).pack(
@@ -175,7 +182,40 @@ class CalculusView:
         self.entrada.pack(
             fill="x",
             padx=20,
-            pady=(0, 14)
+            pady=(0, 10)
+        )
+
+        # SELECTOR DEL ORDEN DE DERIVACIÓN
+
+        ctk.CTkLabel(
+            entrada_card,
+            text="Orden de derivación",
+            font=(FUENTE, 13, "bold"),
+            text_color=TEXTO
+        ).pack(
+            anchor="w",
+            padx=20,
+            pady=(5, 8)
+        )
+
+        self.selector_orden = ctk.CTkOptionMenu(
+            entrada_card,
+            values=[str(i) for i in range(1, 11)],
+            height=40,
+            corner_radius=10,
+            fg_color=AZUL,
+            button_color=AZUL,
+            button_hover_color=AZUL_HOVER,
+            font=(FUENTE, 13),
+            dropdown_font=(FUENTE, 13)
+        )
+
+        self.selector_orden.set("1")
+
+        self.selector_orden.pack(
+            fill="x",
+            padx=20,
+            pady=(0, 15)
         )
 
         self.entrada.bind(
@@ -297,10 +337,30 @@ class CalculusView:
         # Se llama DESPUÉS de crear todos los frames.
         self.mostrar_mensaje_inicial()
 
+        # ==========================================
+        # ASISTENTE MATEMÁTICO - REBELLION
+        # ==========================================
+
+        self.chat_rebellion = MathChat(
+            contenido,
+            contexto={}
+        )
+
+        # Altura controlada para mantener el chat compacto
+        # dentro del desplazamiento general del módulo.
+        self.chat_rebellion.configure(height=500)
+        self.chat_rebellion.pack_propagate(False)
+
+        self.chat_rebellion.pack(
+            fill="x",
+            pady=(10, 20)
+        )
+
     # ─────────────────────────────────────────
     # CALCULAR DERIVADA
     # ─────────────────────────────────────────
 
+    
     def calcular(self):
         expresion = self.entrada.get().strip()
 
@@ -310,6 +370,8 @@ class CalculusView:
             )
             return
 
+        orden = int(self.selector_orden.get())
+
         self.boton_calcular.configure(
             state="disabled",
             text="Calculando..."
@@ -317,20 +379,29 @@ class CalculusView:
 
         try:
             funcion, derivada, pasos = calcular_derivada(
-                expresion
+                expresion,
+                orden
             )
 
-            # Eliminar los widgets anteriores antes de
-            # liberar las referencias a las imágenes.
             self.limpiar_frame(self.resultado_frame)
             self.limpiar_frame(self.pasos)
 
             self.imagenes.clear()
 
-            self.mostrar_resultado(funcion, derivada)
+            self.mostrar_resultado(
+                funcion,
+                derivada,
+                orden
+            )
+
             self.mostrar_pasos(pasos)
+
             self.ultima_funcion = funcion
             self.ultima_derivada = derivada
+            self.ultimo_orden = orden
+            self.ultimos_pasos = pasos
+
+            self.actualizar_contexto_rebellion()
 
         except Exception as error:
             self.mostrar_error(
@@ -345,11 +416,45 @@ class CalculusView:
                 text="Calcular derivada"
             )
 
+
+
+    # ==========================================
+    # CONTEXTO DE REBELLION
+    # ==========================================
+
+    def actualizar_contexto_rebellion(self):
+
+        if self.chat_rebellion is None or self.ultima_funcion is None:
+            return
+
+        pasos_texto = []
+
+        for indice, paso in enumerate(self.ultimos_pasos, start=1):
+
+            if isinstance(paso, dict):
+                pasos_texto.append(
+                    f"Paso {indice}: {paso.get('titulo', '')}\n"
+                    f"Fórmula: {paso.get('formula', '')}\n"
+                    f"Explicación: {paso.get('explicacion', '')}"
+                )
+            else:
+                pasos_texto.append(f"Paso {indice}: {paso}")
+
+        contexto = {
+            "modulo": "Cálculo diferencial",
+            "funcion_original": str(self.ultima_funcion),
+            "derivada": str(self.ultima_derivada),
+            "orden_derivacion": self.ultimo_orden,
+            "procedimiento": "\n\n".join(pasos_texto)
+        }
+
+        self.chat_rebellion.actualizar_contexto(contexto)
+
     # ─────────────────────────────────────────
     # MOSTRAR RESULTADO
     # ─────────────────────────────────────────
 
-    def mostrar_resultado(self, funcion, derivada):
+    def mostrar_resultado(self, funcion, derivada, orden=1):
         self.limpiar_frame(self.resultado_frame)
 
         ctk.CTkLabel(
@@ -363,14 +468,16 @@ class CalculusView:
             pady=(5, 5)
         )
 
-        formula_original = rf"f\; (x) = {sp.latex(funcion)}"
+        formula_original = (
+            rf"f(x) = {sp.latex(funcion)}"
+        )
 
         self.agregar_formula(
             self.resultado_frame,
             formula_original,
             ancho=520,
             alto=80
-)
+        )
 
         ctk.CTkFrame(
             self.resultado_frame,
@@ -384,7 +491,7 @@ class CalculusView:
 
         ctk.CTkLabel(
             self.resultado_frame,
-            text="Derivada obtenida",
+            text=f"Derivada de orden {orden}",
             font=(FUENTE, 12),
             text_color=TEXTO_SECUNDARIO
         ).pack(
@@ -393,13 +500,21 @@ class CalculusView:
             pady=(0, 5)
         )
 
-        formula_derivada = rf"f'(x) = {sp.latex(derivada)}"
-        
+        if orden == 1:
+            notacion = "f'(x)"
+        else:
+            notacion = rf"f^{{({orden})}}(x)"
+
+        formula_derivada = (
+            rf"{notacion} = {sp.latex(derivada)}"
+        )
+
         self.agregar_formula(
             self.resultado_frame,
             formula_derivada,
             ancho=520,
-            alto=80)
+            alto=80
+        )
 
         ctk.CTkLabel(
             self.resultado_frame,
@@ -411,6 +526,7 @@ class CalculusView:
             padx=8,
             pady=(10, 0)
         )
+
 
     # ─────────────────────────────────────────
     # MOSTRAR PROCEDIMIENTO
@@ -661,120 +777,22 @@ class CalculusView:
             )
             return
 
-        self.ventana_graficas = ctk.CTkToplevel(self.parent)
-
-        self.ventana_graficas.title("Seleccionar visualización")
-        self.ventana_graficas.geometry("720x320")
-        self.ventana_graficas.configure(fg_color=FONDO)
-
-        # Mantener encima de la aplicación
-        self.ventana_graficas.attributes("-topmost", True)
-        self.ventana_graficas.transient(self.parent)
-        self.ventana_graficas.grab_set()
-
-        self.ventana_graficas.resizable(False, False)
-
-        # Centrar ventana
-        self.ventana_graficas.update_idletasks()
-
-        ancho = self.ventana_graficas.winfo_width()
-        alto = self.ventana_graficas.winfo_height()
-
-        x = (self.ventana_graficas.winfo_screenwidth() - ancho) // 2
-        y = (self.ventana_graficas.winfo_screenheight() - alto) // 2
-
-        self.ventana_graficas.geometry(f"{ancho}x{alto}+{x}+{y}")
-
-        # Encabezado
-        ctk.CTkLabel(
-            self.ventana_graficas,
-            text="Seleccionar visualización",
-            font=(FUENTE, 22, "bold"),
-            text_color=TEXTO
-        ).pack(pady=(25, 5))
-
-        ctk.CTkLabel(
-            self.ventana_graficas,
-            text="¿Cómo deseas explorar tu función?",
-            font=(FUENTE, 13),
-            text_color=TEXTO_SECUNDARIO
-        ).pack(pady=(0, 25))
-
-
-        # ======================================
-        # CONTENEDOR DE BOTONES
-        # ======================================
-
-        botones = ctk.CTkFrame(
-            self.ventana_graficas,
-            fg_color="transparent"
+        selector = GraphSelector(
+            self.parent,
+            fondo=FONDO,
+            texto=TEXTO,
+            texto_secundario=TEXTO_SECUNDARIO,
+            fuente=FUENTE,
+            color_2d=GRAPH_2D_COLOR,
+            hover_2d=GRAPH_2D_HOVER,
+            color_3d=GRAPH_3D_COLOR,
+            hover_3d=GRAPH_3D_HOVER,
+            on_2d=self.abrir_grafica_2d,
+            on_3d=self.abrir_grafica_3d,
+            on_ar=self.abrir_camara_ar,
+            descripcion="¿Cómo deseas explorar tu función?",
         )
-
-        botones.pack(
-            fill="x",
-            padx=25,
-            pady=(0, 20)
-        )
-
-        # ======================================
-        # GRÁFICA 2D
-        # ======================================
-
-        ctk.CTkButton(
-            botones,
-            text="GRÁFICA 2D",
-            height=110,
-            corner_radius=12,
-            fg_color=GRAPH_2D_COLOR,
-            hover_color=GRAPH_2D_HOVER,
-            font=(FUENTE, 15, "bold"),
-            command=self.abrir_grafica_2d
-        ).pack(
-            side="left",
-            fill="both",
-            expand=True,
-            padx=(0, 6)
-        )
-
-        # ======================================
-        # GRÁFICA 3D
-        # ======================================
-
-        ctk.CTkButton(
-            botones,
-            text="GRÁFICA 3D",
-            height=110,
-            corner_radius=12,
-            fg_color=GRAPH_3D_COLOR,
-            hover_color=GRAPH_3D_HOVER,
-            font=(FUENTE, 15, "bold"),
-            command=self.abrir_grafica_3d
-        ).pack(
-            side="left",
-            fill="both",
-            expand=True,
-            padx=6
-        )
-
-        # ======================================
-        # CÁMARA AR
-        # ======================================
-
-        ctk.CTkButton(
-            botones,
-            text="CÁMARA AR",
-            height=110,
-            corner_radius=12,
-            fg_color="#164E63",
-            hover_color="#155E75",
-            font=(FUENTE, 15, "bold"),
-            command=self.abrir_camara_ar
-        ).pack(
-            side="right",
-            fill="both",
-            expand=True,
-            padx=(6, 0)
-        )
+        self.ventana_graficas = selector.ventana
 
 
     def abrir_grafica_2d(self):
